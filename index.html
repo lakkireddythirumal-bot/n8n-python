@@ -37,25 +37,34 @@
   </div>
 
   <!-- MANAGEMENT QUICK VIEW -->
-  <div class="card management-quick-card">
+  <div class="card">
     <div class="card-title"><h2>⚡ Management Quick View</h2><span id="dateQuickView">Data: --</span></div>
-    <div id="dataQualityPanelHost"></div>
-    <div id="managerIssuesHost"></div>
+    <div class="quick-grid manager-quick-grid">
+      <div class="quick quick-kpi" onclick="openFeedTotals('production_day')"><p>Day Production</p><strong id="qProdDay">-- MT</strong><div class="spark" id="sparkProd"></div></div>
+      <div class="quick" onclick="openFeedTotals('production_month')"><p>Month Production</p><strong id="qProdMonth">-- MT</strong></div>
+      <div class="quick quick-kpi" onclick="openFeedTotals('dispatch_day')"><p>Day Dispatch</p><strong id="qDispDay">-- MT</strong><div class="spark" id="sparkDisp"></div></div>
+      <div class="quick" onclick="openFeedTotals('dispatch_month')"><p>Month Dispatch</p><strong id="qDispMonth">-- MT</strong></div>
+      <div class="quick" onclick="openRawCategory('PURCHASE')"><p>RM Received</p><strong id="qReceived">--</strong></div>
+      <div class="quick" onclick="openRawCategory('CONSUMPTION')"><p>RM Consumption</p><strong id="qConsumption">--</strong></div>
+      <div class="quick" onclick="openStockDetails()"><p>RM Closing</p><strong id="qClosing">--</strong></div>
+      <div class="quick" onclick="openFeedClosingDetails()"><p>Feed Closing</p><strong id="qFeedClosing">-- MT</strong><small id="qFeedClosingBagsMini" style="display:block;margin-top:3px;color:#64748b;font-weight:600">-- Bags</small></div>
+      <div class="quick" onclick="openStockForecast()"><p>RM Reorder</p><strong id="mergedReorder">--</strong></div>
+    </div>
   </div>
 
   <!-- BOMMAKAL PREMIX TRANSFERS -->
-  <div class="card premix-card collapsible-section" id="premixTransferCard">
-    <div class="card-title collapsible-title" onclick="toggleSection('premixTransferCard')"><h2>🧪 Premix Transfer from Bommakal</h2><div class="section-title-right"><span id="datePremix">Data: --</span><button class="section-toggle" aria-label="Expand Premixes">⌄</button></div></div>
-    <div class="collapsible-content"><div id="premixTransferList"><div class="empty">Loading...</div></div></div>
+  <div class="card premix-card" id="premixTransferCard">
+    <div class="card-title"><h2>🧪 Premixes</h2><span id="datePremix">Data: --</span></div>
+    <div id="premixTransferList"><div class="empty">Loading...</div></div>
   </div>
 
   <!-- MONTHLY MIX & CONTRIBUTION -->
-  <div class="card monthly-mix-card collapsible-section" id="monthlyMixSection">
+  <div class="card monthly-mix-card" id="monthlyMixSection">
     <div class="card-title">
-      <div class="collapsible-title-main" onclick="toggleSection('monthlyMixSection')"><div><h2>📊 Monthly Mix &amp; Contribution</h2><span id="dateMonthlyMix">Month: --</span></div></div>
-      <div class="section-title-right"><select id="mixMonthSelect" class="mix-month-select" onchange="event.stopPropagation();setMixMonth(this.value)"></select><button class="section-toggle" onclick="event.stopPropagation();toggleSection('monthlyMixSection')" aria-label="Expand Monthly Mix">⌄</button></div>
+      <div><h2>📊 Monthly Mix &amp; Contribution</h2><span id="dateMonthlyMix">Month: --</span></div>
+      <select id="mixMonthSelect" class="mix-month-select" onchange="setMixMonth(this.value)"></select>
     </div>
-    <div class="collapsible-content"><div class="monthly-mix-grid">
+    <div class="monthly-mix-grid">
       <div class="mix-panel rm">
         <div class="mix-panel-head"><div><strong>🧪 RM Consumption Mix</strong><small id="mixRmTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('rm')">View All →</button></div>
         <div id="mixRmList"><div class="empty">Loading...</div></div>
@@ -69,14 +78,14 @@
         <div id="mixDispList"><div class="empty">Loading...</div></div>
       </div>
     </div>
-    <div class="monthly-mix-note">Percentages are calculated against the selected month total. “Others” combines items outside Top 5.</div></div>
+    <div class="monthly-mix-note">Percentages are calculated against the selected month total. “Others” combines items outside Top 5.</div>
   </div>
 
   <div class="desktop-grid">
     <!-- RAW MATERIAL REORDER -->
-    <div class="card collapsible-section" id="rawReorderSection">
-      <div class="card-title collapsible-title" onclick="toggleSection('rawReorderSection')"><h2>📦 Raw Material Reorder</h2><div class="section-title-right"><span id="dateRawReorder">Data: --</span><button class="section-toggle" aria-label="Expand Raw Material Reorder">⌄</button></div></div>
-      <div class="collapsible-content"><div class="reorder-single-wrap">
+    <div class="card">
+      <div class="card-title"><h2>📦 Raw Material Reorder</h2><span id="dateRawReorder">Data: --</span></div>
+      <div class="reorder-single-wrap">
         <div class="reorder-section-title">🌾 Raw Materials</div>
         <div class="stock-table">
           <div class="stock-head"><span>Material / Avg Day</span><span>Stock</span><span>Cover</span><span>Status</span></div>
@@ -87,30 +96,30 @@
           <div class="stock-head"><span>Material / Avg Day</span><span>Stock</span><span>Cover</span><span>Status</span></div>
           <div id="premixStockList"><div class="empty">Loading...</div></div>
         </div>
-      </div></div>
+      </div>
       
     </div>
 
     <!-- PRODUCTION -->
-    <div class="card collapsible-section" id="productionSection">
-      <div class="card-title collapsible-title" onclick="toggleSection('productionSection')"><h2>🏭 Production</h2><div class="section-title-right"><span id="dateProduction">Data: --</span><button class="section-toggle" aria-label="Expand Production">⌄</button></div></div>
-      <div class="collapsible-content"><div class="production-total" id="productionTotalMain">-- Bags</div>
+    <div class="card">
+      <div class="card-title"><h2>🏭 Production</h2><span id="dateProduction">Data: --</span></div>
+      <div class="production-total" id="productionTotalMain">-- Bags</div>
       <div class="production-label">Actual Production</div>
-      <div id="productionList"><div class="empty">Loading...</div></div></div>
+      <div id="productionList"><div class="empty">Loading...</div></div>
     </div>
 
   </div>
 
   <!-- FEED UNIT -->
-  <div class="card collapsible-section" id="feedUnitSection">
-    <div class="card-title collapsible-title" onclick="toggleSection('feedUnitSection')"><h2>🌾 Feed Unit</h2><div class="section-title-right"><span id="dateFeedUnit">Data: --</span><button class="section-toggle" aria-label="Expand Feed Unit">⌄</button></div></div>
-    <div class="collapsible-content"><div id="feedUnitList"><div class="empty">Loading...</div></div></div>
+  <div class="card">
+    <div class="card-title"><h2>🌾 Feed Unit</h2><span id="dateFeedUnit">Data: --</span></div>
+    <div id="feedUnitList"><div class="empty">Loading...</div></div>
   </div>
 
   <!-- RAW MATERIAL MOVEMENTS -->
-  <div class="card collapsible-section" id="rawMovementsSection">
-    <div class="card-title collapsible-title" onclick="toggleSection('rawMovementsSection')"><h2>📋 Raw Material Movements</h2><div class="section-title-right"><span id="dateRawMovements">Data: --</span><button class="section-toggle" aria-label="Expand Raw Material Movements">⌄</button></div></div>
-    <div class="collapsible-content"><div class="section-tabs" onclick="event.stopPropagation()">
+  <div class="card">
+    <div class="card-title"><h2>📋 Raw Material Movements</h2><span id="dateRawMovements">Data: --</span></div>
+    <div class="section-tabs">
       <button class="active" onclick="setRawTab(this,'STOCK')">Stock</button>
       <button onclick="setRawTab(this,'CONSUMPTION')">Consumption</button>
       <button onclick="setRawTab(this,'PURCHASE')">Received</button>
@@ -119,31 +128,31 @@
       <button onclick="setRawTab(this,'SHORTAGE')">Shortage</button>
       <button onclick="setRawTab(this,'SALE')">Sale</button>
     </div>
-    <div id="rawCategoryList"></div></div>
+    <div id="rawCategoryList"></div>
   </div>
 
     <!-- PP BAGS -->
-    <div class="card collapsible-section" id="ppBagsSection">
-      <div class="card-title collapsible-title" onclick="toggleSection('ppBagsSection')"><h2>🛍 PP Bags</h2><div class="section-title-right"><span id="datePPBags">Data: --</span><button class="section-toggle" aria-label="Expand PP Bags">⌄</button></div></div>
-      <div class="collapsible-content"><div class="pp-grid" id="bagGrid"><div class="empty">Loading...</div></div></div>
+    <div class="card">
+      <div class="card-title"><h2>🛍 PP Bags</h2><span id="datePPBags">Data: --</span></div>
+      <div class="pp-grid" id="bagGrid"><div class="empty">Loading...</div></div>
     </div>
 
   <!-- SPARE PARTS -->
-  <div class="card spare-parts-card collapsible-section" id="sparePartsSection">
-    <div class="card-title"> <div class="collapsible-title-main" onclick="toggleSection('sparePartsSection')"><div><h2>🔧 Spare Parts</h2><span id="dateSpareParts">Data: --</span></div></div><div class="section-title-right"><button class="spare-refresh-btn" onclick="event.stopPropagation();loadSpareParts(true)">↻ Refresh</button><button class="section-toggle" onclick="event.stopPropagation();toggleSection('sparePartsSection')" aria-label="Expand Spare Parts">⌄</button></div></div>
-    <div class="collapsible-content"><div class="section-tabs spare-tabs" onclick="event.stopPropagation()">
+  <div class="card spare-parts-card" id="sparePartsSection">
+    <div class="card-title"><div><h2>🔧 Spare Parts</h2><span id="dateSpareParts">Data: --</span></div><button class="spare-refresh-btn" onclick="loadSpareParts(true)">↻ Refresh</button></div>
+    <div class="section-tabs spare-tabs">
       <button class="active" onclick="setSpareTab(this,'SPARE_STOCK')">Stock</button>
       <button onclick="setSpareTab(this,'SPARE_ORDERS')">Orders</button>
       <button onclick="setSpareTab(this,'EMPLOYEE_MESSAGES')">Employee Messages</button>
     </div>
     <div class="spare-search-wrap"><input id="spareSearch" class="search-input" placeholder="Search spare parts..." oninput="renderSpareParts(this.value)"></div>
-    <div id="sparePartsList"><div class="empty">Loading spare parts...</div></div></div>
+    <div id="sparePartsList"><div class="empty">Loading spare parts...</div></div>
   </div>
 
   <!-- TRENDS -->
-  <div class="card collapsible-section" id="trendsSection">
-    <div class="card-title collapsible-title" onclick="toggleSection('trendsSection')"><h2>📊 Trends</h2><div class="section-title-right"><span id="dateTrends">Data through: --</span><button class="section-toggle" aria-label="Expand Trends">⌄</button></div></div>
-    <div class="collapsible-content"><div class="trend-wrapper" id="trendWrapper">
+  <div class="card" id="trendsSection">
+    <div class="card-title"><h2>📊 Trends</h2><span id="dateTrends">Data through: --</span></div>
+    <div class="trend-wrapper" id="trendWrapper">
       <div class="trend-card"><div class="trend-header"><div><h3>📦 Raw Material Consumption</h3><small id="trendDateMaterial">Data: --</small></div><select id="materialSelect" onchange="drawMaterialChart(this.value)"></select></div><canvas id="materialChart"></canvas></div>
       <div class="trend-card"><div class="trend-header"><div><h3>📥 Purchase / Received Trend</h3><small id="trendDatePurchase">Data: --</small></div></div><canvas id="purchaseChart"></canvas></div>
       <div class="trend-card"><div class="trend-header"><div><h3>📦 Closing Stock Trend</h3><small id="trendDateClosing">Data: --</small></div></div><canvas id="closingChart"></canvas></div>
@@ -153,7 +162,7 @@
       <div class="trend-card"><div class="trend-header"><div><h3>🌾 Feed Unit Production / Dispatch</h3><small id="trendDateFeed">Data through: --</small></div></div><canvas id="feedChart"></canvas></div>
       <div class="trend-card"><div class="trend-header"><div><h3>🛍 PP Bags Issue / Damage</h3><small id="trendDateBags">Data through: --</small></div></div><canvas id="bagChart"></canvas></div>
     </div>
-    <div class="dots" id="trendDots"></div></div>
+    <div class="dots" id="trendDots"></div>
   </div>
 
   <div class="bottom-nav">
