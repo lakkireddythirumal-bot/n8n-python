@@ -845,3 +845,77 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
   .reorder-card .reorder-card-metrics strong{font-size:14px!important;font-weight:800!important;}
   .reorder-card .status-dot{width:22px!important;height:22px!important;}
 }
+
+/* REORDER FINAL SIZE FIX v2 — intentionally overrides all earlier reorder rules */
+.stock-row.reorder-card{
+  padding:7px 9px !important;
+  margin:0 0 5px !important;
+  min-height:0 !important;
+  border-radius:11px !important;
+}
+.reorder-card-top{
+  gap:7px !important;
+  min-height:22px !important;
+}
+.reorder-card-top .reorder-material{
+  font-size:14px !important;
+  font-weight:700 !important;
+  line-height:1.1 !important;
+}
+.reorder-card .status-dot{
+  width:20px !important;
+  height:20px !important;
+}
+.reorder-card .status-dot.good::after,
+.reorder-card .status-dot.warn::after,
+.reorder-card .status-dot.bad::after{
+  width:9px !important;
+  height:9px !important;
+}
+.reorder-card-metrics{
+  gap:3px !important;
+  margin-top:4px !important;
+  padding-top:4px !important;
+}
+.reorder-card .reorder-card-metrics span{
+  font-size:10px !important;
+  line-height:1 !important;
+}
+.reorder-card .reorder-card-metrics b{
+  font-size:8px !important;
+  line-height:1 !important;
+  font-weight:800 !important;
+  letter-spacing:.2px !important;
+  margin-bottom:2px !important;
+}
+.reorder-card .reorder-card-metrics strong{
+  font-size:12.5px !important;
+  line-height:1 !important;
+  font-weight:800 !important;
+  -webkit-text-stroke:0 !important;
+}
+@media(max-width:600px){
+  .stock-row.reorder-card{
+    padding:7px 8px !important;
+    margin-bottom:5px !important;
+  }
+  .reorder-card-top .reorder-material{
+    font-size:14px !important;
+  }
+  .reorder-card .status-dot{
+    width:20px !important;
+    height:20px !important;
+  }
+  .reorder-card-metrics{
+    gap:3px !important;
+    margin-top:4px !important;
+    padding-top:4px !important;
+  }
+  .reorder-card .reorder-card-metrics b{
+    font-size:8px !important;
+  }
+  .reorder-card .reorder-card-metrics strong{
+    font-size:12.5px !important;
+    font-weight:800 !important;
+  }
+}
