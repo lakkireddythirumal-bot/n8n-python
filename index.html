@@ -37,24 +37,15 @@
   </div>
 
   <!-- MANAGEMENT QUICK VIEW -->
-  <div class="card">
+  <div class="card management-quick-card">
     <div class="card-title"><h2>⚡ Management Quick View</h2><span id="dateQuickView">Data: --</span></div>
-    <div class="quick-grid manager-quick-grid">
-      <div class="quick quick-kpi" onclick="openFeedTotals('production_day')"><p>Day Production</p><strong id="qProdDay">-- MT</strong><div class="spark" id="sparkProd"></div></div>
-      <div class="quick" onclick="openFeedTotals('production_month')"><p>Month Production</p><strong id="qProdMonth">-- MT</strong></div>
-      <div class="quick quick-kpi" onclick="openFeedTotals('dispatch_day')"><p>Day Dispatch</p><strong id="qDispDay">-- MT</strong><div class="spark" id="sparkDisp"></div></div>
-      <div class="quick" onclick="openFeedTotals('dispatch_month')"><p>Month Dispatch</p><strong id="qDispMonth">-- MT</strong></div>
-      <div class="quick" onclick="openRawCategory('PURCHASE')"><p>RM Received</p><strong id="qReceived">--</strong></div>
-      <div class="quick" onclick="openRawCategory('CONSUMPTION')"><p>RM Consumption</p><strong id="qConsumption">--</strong></div>
-      <div class="quick" onclick="openStockDetails()"><p>RM Closing</p><strong id="qClosing">--</strong></div>
-      <div class="quick" onclick="openFeedClosingDetails()"><p>Feed Closing</p><strong id="qFeedClosing">-- MT</strong><small id="qFeedClosingBagsMini" style="display:block;margin-top:3px;color:#64748b;font-weight:600">-- Bags</small></div>
-      <div class="quick" onclick="openStockForecast()"><p>RM Reorder</p><strong id="mergedReorder">--</strong></div>
-    </div>
+    <div id="dataQualityPanelHost"></div>
+    <div id="managerIssuesHost"></div>
   </div>
 
   <!-- BOMMAKAL PREMIX TRANSFERS -->
   <div class="card premix-card collapsible-section" id="premixTransferCard">
-    <div class="card-title collapsible-title" onclick="toggleSection('premixTransferCard')"><h2>🧪 Premixes</h2><div class="section-title-right"><span id="datePremix">Data: --</span><button class="section-toggle" aria-label="Expand Premixes">⌄</button></div></div>
+    <div class="card-title collapsible-title" onclick="toggleSection('premixTransferCard')"><h2>🧪 Premix Transfer from Bommakal</h2><div class="section-title-right"><span id="datePremix">Data: --</span><button class="section-toggle" aria-label="Expand Premixes">⌄</button></div></div>
     <div class="collapsible-content"><div id="premixTransferList"><div class="empty">Loading...</div></div></div>
   </div>
 

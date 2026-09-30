@@ -1405,14 +1405,47 @@ function badDataIssueCount(){
 function renderDataQualityPanel(){
   const host=document.getElementById("dataQualityPanelHost");if(!host)return;
   const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage();
-  host.innerHTML=`<div class="card control-card" id="dataQualityPanel"><div class="card-title"><h2>🛡 Data Health &amp; Issues</h2><span>Quality • Accuracy • Issues</span></div><div class="control-grid"><button class="control-item" onclick="openDQDuplicates()"><small>🔁 Duplicate Transactions</small><strong>${dup.length}</strong></button><button class="control-item" onclick="openDQUnknown()"><small>❓ Unknown Transactions</small><strong>${unk.length}</strong></button><button class="control-item" onclick="openDQContinuity()"><small>🔗 Opening → Closing</small><strong>${cont.length}</strong></button><button class="control-item" onclick="openDQAbnormal()"><small>⚠ Abnormal Activity</small><strong>${ab.length}</strong></button><button class="control-item" onclick="openDQHistory()"><small>📈 Historical Trend</small><strong>${getMaterials().length}</strong></button><button class="control-item" onclick="openDQCoverage()"><small>🎯 Coverage</small><strong>${cov.filter(x=>x.percent===100).length}/${cov.length}</strong></button></div><div class="health-strip" onclick="openDataHealth()"><span>⚠ Data Issues</span><b>${badDataIssueCount()}</b> <span>View details →</span></div><div class="small-note">Consumption spelling variations are automatically treated as Consumption; only genuinely unrecognized transaction names are shown as Unknown.</div></div>`;
+  const issueTotal=badDataIssueCount();
+  const healthRows=[
+    ["📦 Stock Data",latestStockDataDate()],
+    ["🏭 Production Data",latestProductionDataDate()],
+    ["🌾 Feed Unit Data",latestFeedUnitDataDate()],
+    ["🛍 PP Bags Data",latestPPBagDataDate()]
+  ];
+  host.innerHTML=`<div class="quick-subpanel data-health-panel">
+    <div class="quick-subpanel-head"><strong>🛡 Data Health</strong><span>${issueTotal===0?"🟢 All checks clear":"🟠 "+issueTotal+" issue(s)"}</span></div>
+    <div class="health-card-grid">${healthRows.map(x=>`<div class="health-card"><div><strong>${x[0]}</strong><small>${x[1]?formatSectionDate(x[1]).replace(/^Data: /,""):"Date unavailable"}</small></div><b class="${x[1]?"good":"warn"}">${x[1]?"●":"!"}</b></div>`).join("")}</div>
+    <div class="health-detail-grid">
+      <button class="health-detail" onclick="openDQDuplicates()"><small>🔁 Duplicate Transactions</small><strong>${dup.length}</strong></button>
+      <button class="health-detail" onclick="openDQUnknown()"><small>❓ Unknown Transactions</small><strong>${unk.length}</strong></button>
+      <button class="health-detail" onclick="openDQContinuity()"><small>🔗 Opening → Closing</small><strong>${cont.length}</strong></button>
+      <button class="health-detail" onclick="openDQAbnormal()"><small>⚠ Abnormal Activity</small><strong>${ab.length}</strong></button>
+      <button class="health-detail" onclick="openDQCoverage()"><small>🎯 Coverage</small><strong>${cov.filter(x=>x.percent===100).length}/${cov.length}</strong></button>
+      <button class="health-detail" onclick="openDQHistory()"><small>📈 Historical Trend</small><strong>${getMaterials().length}</strong></button>
+    </div>
+    <div class="health-strip" onclick="openDataHealth()"><span>⚠ Data Issues</span><b>${issueTotal}</b><span>View details →</span></div>
+  </div>`;
+}
+function renderManagerIssues(){
+  const host=document.getElementById("managerIssuesHost");if(!host)return;
+  const items=managerAttentionItems();
+  const reorder=getMaterials().filter(m=>stockStatus(num(getMaterial(m)?.closing)||0,avgConsumption(m)).status==="REORDER").length;
+  const pendingSpare=Array.isArray(SPARE_DATA?.SPARE_ORDERS)?SPARE_DATA.SPARE_ORDERS.length:0;
+  const lowSpare=Array.isArray(SPARE_DATA?.SPARE_STOCK)?SPARE_DATA.SPARE_STOCK.filter(r=>{const st=num(spareVal(r,["STOCK","Stock","stock"]));const rl=num(spareVal(r,["REORDER_LEVEL","Reorder Level","REORDER LEVEL"]));return rl>0&&st<=rl;}).length:0;
+  host.innerHTML=`<div class="quick-subpanel manager-issues-panel">
+    <div class="quick-subpanel-head"><strong>🚨 Issues / Attention</strong><span>${items.length+reorder+lowSpare>0?"Needs attention":"🟢 No major issues"}</span></div>
+    <div class="issue-summary-grid">
+      <button class="issue-summary critical" onclick="openStockForecast()"><small>🌾 RM Reorder</small><strong>${reorder}</strong><span>items</span></button>
+      <button class="issue-summary ${items.length?'warning':'good'}" onclick="openDataHealth()"><small>⚠ Data Issues</small><strong>${badDataIssueCount()}</strong><span>checks</span></button>
+      <button class="issue-summary ${lowSpare?'critical':'good'}" onclick="goSpareParts()"><small>🔧 Spare Low Stock</small><strong>${lowSpare}</strong><span>items</span></button>
+      <button class="issue-summary ${pendingSpare?'warning':'good'}" onclick="goSpareParts()"><small>📋 Spare Orders</small><strong>${pendingSpare}</strong><span>records</span></button>
+    </div>
+    ${items.slice(0,5).map(x=>`<div class="attention-row ${x.level}" onclick="${x.action||"openDataHealth()"}"><span>${x.level==="critical"?"🔴":"🟡"}</span><div><strong>${esc(x.title)}</strong><small>${esc(x.msg)}</small></div></div>`).join("") || `<div class="small-note">No immediate attention items for the selected date.</div>`}
+  </div>`;
 }
 function ensureDataQualityHost(){
-  const bagGrid=document.getElementById("bagGrid");if(!bagGrid)return;
-  const bagCard=bagGrid.closest(".card");if(!bagCard)return;
-  let host=document.getElementById("dataQualityPanelHost");
-  if(!host){host=document.createElement("div");host.id="dataQualityPanelHost";bagCard.parentNode.insertBefore(host,bagCard.nextSibling)}
   renderDataQualityPanel();
+  renderManagerIssues();
 }
 const __dqBaseRenderControlCenter=renderControlCenter;
 renderControlCenter=function(){__dqBaseRenderControlCenter();ensureDataQualityHost()};
@@ -1500,6 +1533,7 @@ async function loadSpareParts(showToastOnSuccess=false){
       EMPLOYEE_MESSAGES:Array.isArray(data.EMPLOYEE_MESSAGES)?data.EMPLOYEE_MESSAGES:[]
     };
     renderSpareParts(document.getElementById('spareSearch')?.value||'');
+    renderManagerIssues();
     if(showToastOnSuccess)showToast('Spare Parts updated');
   }catch(error){
     console.error('Spare Parts API:',error);
