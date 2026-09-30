@@ -921,9 +921,22 @@ function trendClosing(){
 /* =====================================================
    NAVIGATION
 ===================================================== */
+function toggleSection(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.toggle("open");
+  const isOpen=el.classList.contains("open");
+  const btn=el.querySelector(":scope > .card-title .section-toggle");
+  if(btn)btn.setAttribute("aria-label",(isOpen?"Collapse ":"Expand ")+((el.querySelector(":scope > .card-title h2")||{}).textContent||"section").trim());
+}
+function openSection(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.add("open");
+}
 function goHome(){window.scrollTo({top:0,behavior:"smooth"})}
-function goSpareParts(){document.getElementById("sparePartsSection")?.scrollIntoView({behavior:"smooth",block:"start"});loadSpareParts(false)}
-function goTrend(){document.getElementById("trendsSection").scrollIntoView({behavior:"smooth"})}
+function goSpareParts(){openSection("sparePartsSection");document.getElementById("sparePartsSection")?.scrollIntoView({behavior:"smooth",block:"start"});loadSpareParts(false)}
+function goTrend(){openSection("trendsSection");document.getElementById("trendsSection")?.scrollIntoView({behavior:"smooth",block:"start"})}
 
 
 /* =====================================================
