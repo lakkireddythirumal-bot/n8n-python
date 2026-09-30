@@ -3,6 +3,7 @@
    WORKING GOOGLE APPS SCRIPT URL — KEEP UNCHANGED • UI REFINEMENT
 ===================================================== */
 const API_URL="https://script.google.com/macros/s/AKfycbxhiO5LAGwqkvDHW9DjH8jynYzYlyjAvNxgYlV9J3Y1GGZJxGb_3oXCvk-Bzefp74oa/exec";
+const SPARE_PARTS_API="https://script.google.com/macros/s/AKfycbweDXm7if7XuHwAUju9WkIkNXkg0CakJJ9mmEBkQBwuQVuyYC9YkxjClVvovSSjv320/exec";
 
 /* =====================================================
    SETTINGS
@@ -1318,10 +1319,100 @@ const __dqBaseRenderControlCenter=renderControlCenter;
 renderControlCenter=function(){__dqBaseRenderControlCenter();ensureDataQualityHost()};
 
 /* =====================================================
+   SPARE PARTS — ADDITIVE SEPARATE API / UI
+   Existing Feed Plant API and logic remain unchanged.
+===================================================== */
+let SPARE_DATA={SPARE_STOCK:[],SPARE_ORDERS:[],EMPLOYEE_MESSAGES:[]};
+let spareTab="SPARE_STOCK";
+
+function spareVal(row, keys){
+  for(const k of keys){ if(row && row[k]!==undefined && row[k]!==null && row[k]!=="") return row[k]; }
+  return "";
+}
+function spareText(v){return clean(v);}
+function setSpareTab(btn,tab){
+  document.querySelectorAll('.spare-tabs button').forEach(x=>x.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  spareTab=tab;
+  const input=document.getElementById('spareSearch');
+  if(input)input.value="";
+  renderSpareParts("");
+}
+function renderSpareParts(query=""){
+  const el=document.getElementById('sparePartsList');
+  if(!el)return;
+  const q=normalize(query);
+  const rows=Array.isArray(SPARE_DATA[spareTab])?SPARE_DATA[spareTab]:[];
+  const filtered=q?rows.filter(r=>normalize(Object.values(r||{}).join(" ")).includes(q)):rows;
+  if(!filtered.length){el.innerHTML=`<div class="empty">No ${spareTab==='SPARE_STOCK'?'spare stock':spareTab==='SPARE_ORDERS'?'orders':'employee messages'} found.</div>`;return;}
+
+  if(spareTab==='SPARE_STOCK'){
+    el.innerHTML=filtered.map(r=>{
+      const name=spareVal(r,['NAME','Name','PART_NAME','Part_Name','PART NAME'])||'Unnamed Part';
+      const category=spareVal(r,['CATEGORY','Category']);
+      const size=spareVal(r,['SIZE','Size']);
+      const code=spareVal(r,['CODE','Code']);
+      const stock=spareVal(r,['STOCK','Stock']);
+      const unit=spareVal(r,['UNIT','Unit'])||'Nos';
+      const reorder=spareVal(r,['REORDER_LEVEL','Reorder_Level','REORDER LEVEL']);
+      const location=spareVal(r,['LOCATION','Location']);
+      const n=num(stock), rl=num(reorder);
+      const low=rl!==null && n!==null && n<=rl;
+      return `<div class="spare-stock-row ${low?'spare-low-stock':''}">
+        <div class="spare-main"><strong>${esc(name)}</strong><small>${esc(category||'')}${size?' • '+esc(size):''}${code?' • Code: '+esc(code):''}</small></div>
+        <div class="spare-stock-right"><strong>${esc(fmt(stock))}</strong><small>${esc(unit)}${low?' • Reorder':''}</small></div>
+        ${location?`<div class="spare-location">📍 ${esc(location)}</div>`:''}
+      </div>`;
+    }).join('');
+    return;
+  }
+
+  if(spareTab==='SPARE_ORDERS'){
+    el.innerHTML=filtered.map(r=>{
+      const date=spareVal(r,['DATE','Date']);
+      const title=spareVal(r,['ORDER_TITLE','Order_Title','ORDER TITLE']);
+      const msg=spareVal(r,['ORDER_MESSAGE','Order_Message','ORDER MESSAGE','MESSAGE','Message']);
+      const status=spareVal(r,['STATUS','Status']);
+      return `<div class="spare-message-card"><div class="spare-message-head"><strong>${esc(title||'Spare Parts Order')}</strong><small>${esc(date)}</small></div>${status?`<span class="spare-status">${esc(status)}</span>`:''}<div class="spare-message-body">${esc(msg||'')}</div></div>`;
+    }).join('');
+    return;
+  }
+
+  el.innerHTML=filtered.map(r=>{
+    const date=spareVal(r,['DATE','Date']);
+    const employee=spareVal(r,['EMPLOYEE','Employee','EMPLOYEE_NAME','Employee_Name']);
+    const msg=spareVal(r,['MESSAGE','Message','EMPLOYEE_MESSAGE','Employee_Message']);
+    const category=spareVal(r,['CATEGORY','Category']);
+    const status=spareVal(r,['STATUS','Status']);
+    return `<div class="spare-message-card"><div class="spare-message-head"><strong>${esc(employee||'Employee Message')}</strong><small>${esc(date)}</small></div>${category?`<div class="spare-message-meta">${esc(category)}${status?' • '+esc(status):''}</div>`:''}<div class="spare-message-body">${esc(msg||'')}</div></div>`;
+  }).join('');
+}
+async function loadSpareParts(showToastOnSuccess=false){
+  const el=document.getElementById('sparePartsList');
+  if(el && !showToastOnSuccess)el.innerHTML='<div class="empty">Loading spare parts...</div>';
+  try{
+    const response=await fetch(SPARE_PARTS_API+`?t=${Date.now()}`,{cache:'no-store'});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const data=await response.json();
+    SPARE_DATA={
+      SPARE_STOCK:Array.isArray(data.SPARE_STOCK)?data.SPARE_STOCK:[],
+      SPARE_ORDERS:Array.isArray(data.SPARE_ORDERS)?data.SPARE_ORDERS:[],
+      EMPLOYEE_MESSAGES:Array.isArray(data.EMPLOYEE_MESSAGES)?data.EMPLOYEE_MESSAGES:[]
+    };
+    renderSpareParts(document.getElementById('spareSearch')?.value||'');
+    if(showToastOnSuccess)showToast('Spare Parts updated');
+  }catch(error){
+    console.error('Spare Parts API:',error);
+    if(el)el.innerHTML='<div class="error-box">❌ Spare Parts API connection failed.</div>';
+  }
+}
+
+/* =====================================================
    START
 ===================================================== */
 restoreCache();
 refreshData();
+loadSpareParts();
 
 /* PWA */
 let deferredPrompt=null;
