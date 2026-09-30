@@ -768,3 +768,30 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
   .reorder-card .status-dot{width:23px!important;height:23px!important;}
   .reorder-card .status-dot.good::after,.reorder-card .status-dot.warn::after,.reorder-card .status-dot.bad::after{width:10px!important;height:10px!important;}
 }
+
+/* FINAL: Raw Material Reorder metric visibility */
+.reorder-card .reorder-card-metrics span,
+.reorder-card .reorder-card-metrics b,
+.reorder-card .reorder-card-metrics strong{
+  font-family:inherit!important;
+}
+.reorder-card .reorder-card-metrics b{
+  font-size:11px!important;
+  font-weight:900!important;
+  color:#667085!important;
+  letter-spacing:.45px!important;
+}
+.reorder-card .reorder-card-metrics strong{
+  display:block!important;
+  margin-top:2px!important;
+  font-size:17px!important;
+  line-height:1.15!important;
+  font-weight:900!important;
+  color:#172033!important;
+  -webkit-text-stroke:.15px currentColor!important;
+  font-variant-numeric:tabular-nums!important;
+}
+@media(max-width:600px){
+  .reorder-card .reorder-card-metrics b{font-size:10.5px!important;font-weight:900!important}
+  .reorder-card .reorder-card-metrics strong{font-size:16px!important;font-weight:900!important}
+}
