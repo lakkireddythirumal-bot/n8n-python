@@ -710,3 +710,30 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 /* Six-item bottom navigation: keep the existing look while fitting the new Spares tab. */
 .bottom-nav .nav-item{flex:1;min-width:0;padding-left:3px;padding-right:3px}
 .bottom-nav .nav-item div{font-size:18px!important}
+
+/* ===== Section data-date indicators ===== */
+.card-title>span[id^="date"],
+.card-title span[id="dateMonthlyMix"]{
+  display:inline-flex!important;
+  align-items:center;
+  max-width:52%;
+  padding:4px 7px;
+  border-radius:12px;
+  background:#f1f5f9;
+  color:#64748b!important;
+  font-size:9px!important;
+  font-weight:700!important;
+  line-height:1.2;
+  text-align:right;
+}
+.trend-header small[id^="trendDate"]{
+  display:block;
+  color:#7a8698;
+  margin-top:2px;
+  font-size:8px;
+  font-weight:700;
+}
+@media(max-width:520px){
+  .card-title>span[id^="date"],
+  .card-title span[id="dateMonthlyMix"]{font-size:8px!important;max-width:48%;padding:3px 6px}
+}

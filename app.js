@@ -563,6 +563,90 @@ function openMonthlyMixDetails(type){
   showModal(title+" • "+label,html);
 }
 
+function formatSectionDate(v){
+  const d=dateOnly(v);
+  if(!d)return "Data: --";
+  const m=d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m)return "Data: "+d;
+  const names=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `Data: ${m[3]}-${names[Number(m[2])-1]||m[2]}-${m[1]}`;
+}
+function latestDateFromRows(rows, keys=[]){
+  const dates=[];
+  (Array.isArray(rows)?rows:[]).forEach(r=>{
+    if(!r)return;
+    keys.forEach(k=>{if(r[k]){const d=dateOnly(r[k]);if(d)dates.push(d)}});
+  });
+  return dates.sort().pop()||"";
+}
+function latestStockDataDate(){
+  const dates=[];
+  (DATA.stock||[]).forEach(r=>{
+    [r.report_date,r.Report_Date,r.date,r.DATE].forEach(v=>{const d=dateOnly(v);if(d)dates.push(d)});
+    (r.transactions||[]).forEach(t=>{const d=dateOnly(rowDate(t));if(d)dates.push(d)});
+  });
+  (DATA.stockHistory||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date||r.date);if(d)dates.push(d)});
+  return dates.sort().pop()||"";
+}
+function latestProductionDataDate(){
+  const dates=[];
+  (DATA.production||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date||r.date);if(d)dates.push(d)});
+  (DATA.productionHistory||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date||r.date);if(d)dates.push(d)});
+  (DATA.productionTrend||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date||r.date);if(d)dates.push(d)});
+  return dates.sort().pop()||"";
+}
+function latestFeedUnitDataDate(){
+  return latestDateFromRows(DATA.feedUnitData,["report_date","Report_Date","date","DATE"])||latestDateFromRows(DATA.feedUnitTotals,["report_date","Report_Date","date","DATE"]);
+}
+function latestPPBagDataDate(){
+  const a=latestDateFromRows(DATA.bags,["report_date","Report_Date","date","DATE"]);
+  const b=latestDateFromRows(DATA.bagsHistory,["report_date","Report_Date","date","DATE"]);
+  return [a,b].filter(Boolean).sort().pop()||"";
+}
+function latestTrendDataDate(){
+  return [latestStockDataDate(),latestProductionDataDate(),latestFeedUnitDataDate(),latestPPBagDataDate(),dateOnly(DATA.report_date)].filter(Boolean).sort().pop()||"";
+}
+function latestSpareDataDate(tab=spareTab){
+  const rows=Array.isArray(SPARE_DATA[tab])?SPARE_DATA[tab]:[];
+  const dates=[];
+  rows.forEach(r=>{
+    Object.keys(r||{}).forEach(k=>{
+      const nk=normalize(k);
+      if(nk.includes("DATE")||nk.includes("UPDATED")){
+        const d=dateOnly(r[k]);if(d)dates.push(d);
+      }
+    });
+  });
+  return dates.sort().pop()||"";
+}
+function updateSectionDates(){
+  const selected=VIEW_DATE?dateOnly(VIEW_DATE):"";
+  const stockDate=selected||latestStockDataDate()||dateOnly(DATA.report_date);
+  const prodDate=selected||latestProductionDataDate()||dateOnly(DATA.report_date);
+  const feedDate=selected||latestFeedUnitDataDate()||dateOnly(DATA.report_date);
+  const bagDate=selected||latestPPBagDataDate()||dateOnly(DATA.report_date);
+  const trendDate=selected||latestTrendDataDate()||dateOnly(DATA.report_date);
+  setText("dateQuickView",formatSectionDate(selected||dateOnly(DATA.report_date)||trendDate));
+  setText("datePremix",formatSectionDate(selected||latestBommakalDate()||dateOnly(DATA.report_date)));
+  setText("dateMonthlyMix",MIX_MONTH?`Month: ${monthLabel(MIX_MONTH)}`:"Month: --");
+  setText("dateRawReorder",formatSectionDate(stockDate));
+  setText("dateProduction",formatSectionDate(prodDate));
+  setText("dateFeedUnit",formatSectionDate(feedDate));
+  setText("dateRawMovements",formatSectionDate(stockDate));
+  setText("datePPBags",formatSectionDate(bagDate));
+  setText("dateTrends",trendDate?`Data through: ${formatSectionDate(trendDate).replace(/^Data: /,"")}`:"Data through: --");
+  const spareDate=latestSpareDataDate(spareTab);
+  setText("dateSpareParts",spareDate?formatSectionDate(spareDate):"Data: --");
+  setText("trendDateMaterial",formatSectionDate(stockDate));
+  setText("trendDatePurchase",formatSectionDate(stockDate));
+  setText("trendDateClosing",formatSectionDate(stockDate));
+  setText("trendDateProduction",trendDate?`Data through: ${formatSectionDate(trendDate).replace(/^Data: /,"")}`:"Data through: --");
+  setText("trendDateOutput",formatSectionDate(prodDate));
+  setText("trendDateLoss",formatSectionDate(prodDate));
+  setText("trendDateFeed",formatSectionDate(feedDate));
+  setText("trendDateBags",formatSectionDate(bagDate));
+}
+
 function renderDashboard(){
   renderSmartHeader();
   renderQuick();
@@ -576,6 +660,7 @@ function renderDashboard(){
   renderAlerts();
   renderRawCategory("STOCK");
   renderTrends();
+  updateSectionDates();
 }
 
 
@@ -1345,6 +1430,7 @@ function renderSpareParts(query=""){
   const q=normalize(query);
   const rows=Array.isArray(SPARE_DATA[spareTab])?SPARE_DATA[spareTab]:[];
   const filtered=q?rows.filter(r=>normalize(Object.values(r||{}).join(" ")).includes(q)):rows;
+  updateSectionDates();
   if(!filtered.length){el.innerHTML=`<div class="empty">No ${spareTab==='SPARE_STOCK'?'spare stock':spareTab==='SPARE_ORDERS'?'orders':'employee messages'} found.</div>`;return;}
 
   if(spareTab==='SPARE_STOCK'){
