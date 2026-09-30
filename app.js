@@ -837,6 +837,7 @@ function trendClosing(){
    NAVIGATION
 ===================================================== */
 function goHome(){window.scrollTo({top:0,behavior:"smooth"})}
+function goSpareParts(){document.getElementById("sparePartsSection")?.scrollIntoView({behavior:"smooth",block:"start"});loadSpareParts(false)}
 function goTrend(){document.getElementById("trendsSection").scrollIntoView({behavior:"smooth"})}
 
 

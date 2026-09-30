@@ -707,3 +707,6 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 .spare-location{grid-column:1/-1;color:#718096;font-size:10px;font-weight:700}
 .spare-message-card{position:relative;border:1px solid #e3e8f0;border-radius:14px;padding:11px 12px;background:linear-gradient(145deg,#fafcff,#f4f7fb);margin-bottom:8px;box-shadow:0 3px 10px rgba(31,47,77,.035)}
 .spare-message-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.spare-message-head strong{color:#26344b;font-size:13px}.spare-message-head small{color:#7b8799;font-size:10px;white-space:nowrap}.spare-message-meta{font-size:10px;color:#657287;font-weight:700;margin-top:4px}.spare-status{display:inline-block;margin-top:5px;padding:3px 7px;border-radius:10px;background:#edf2ff;color:#315fd6;font-size:9px;font-weight:800}.spare-message-body{white-space:pre-wrap;color:#4d5b70;font-size:12px;line-height:1.45;margin-top:8px;max-height:240px;overflow:auto}
+/* Six-item bottom navigation: keep the existing look while fitting the new Spares tab. */
+.bottom-nav .nav-item{flex:1;min-width:0;padding-left:3px;padding-right:3px}
+.bottom-nav .nav-item div{font-size:18px!important}
