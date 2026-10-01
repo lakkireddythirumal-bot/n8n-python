@@ -672,17 +672,29 @@ function historySelectOptions(items,selected){
   return items.map(x=>`<option value="${esc(x)}" ${normalize(x)===normalize(selected)?"selected":""}>${esc(x)}</option>`).join("");
 }
 function rmHistoryTransactions(material){
-  const target=normalize(material),out=[];
-  (DATA.stock||[]).forEach(x=>{
-    if(normalize(x.material)!==target)return;
-    (Array.isArray(x.transactions)?x.transactions:[]).forEach(t=>out.push(t));
+  const target=normalize(material),map=new Map();
+  /* Prefer the dedicated stock_history because it contains the full dated
+     movement history. Current STOCK transaction arrays can be only a latest
+     snapshot on some API responses. */
+  (DATA.stockHistory||[]).forEach(t=>{
+    if(normalize(t.material)!==target)return;
+    const d=dateOnly(rowDate(t));
+    const key=[d,tType(t),String(tVal(t)),String(t.for_day??""),String(t.for_month??""),String(t.for_year??"")].join("|");
+    map.set(key,t);
   });
-  if(!out.length){
-    (DATA.stockHistory||[]).forEach(t=>{
-      if(normalize(t.material)===target)out.push(t);
+  /* If stock_history is unavailable for this material, fall back to the
+     transactions embedded in the current stock object. */
+  if(!map.size){
+    (DATA.stock||[]).forEach(x=>{
+      if(normalize(x.material)!==target)return;
+      (Array.isArray(x.transactions)?x.transactions:[]).forEach(t=>{
+        const d=dateOnly(rowDate(t));
+        const key=[d,tType(t),String(tVal(t)),String(t.for_day??""),String(t.for_month??""),String(t.for_year??"")].join("|");
+        map.set(key,t);
+      });
     });
   }
-  return out;
+  return [...map.values()].sort((a,b)=>dateOnly(rowDate(a)).localeCompare(dateOnly(rowDate(b))));
 }
 function rmHistoryMaterials(){
   const set=new Map();

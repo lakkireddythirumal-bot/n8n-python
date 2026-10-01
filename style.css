@@ -943,6 +943,7 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 .history-table td{padding:8px 6px;border-top:1px solid #eef0f3;text-align:right;white-space:nowrap}
 .history-empty{padding:12px;text-align:center;color:#64748b;font-size:12px}
 @media(max-width:520px){
-  .history-filter,.history-filter-3{grid-template-columns:1fr}
+  .history-filter,.history-filter-3{grid-template-columns:1fr 1fr}
+  .history-filter-3 label:first-child{grid-column:1 / -1}
   .history-card-head{padding:12px}
 }
