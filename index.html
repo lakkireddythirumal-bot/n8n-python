@@ -106,30 +106,6 @@
     <div id="feedUnitList"><div class="empty">Loading...</div></div>
   </div>
 
-  <!-- COLLAPSED HISTORY CARDS -->
-  <div class="history-cards-wrap">
-    <div class="history-card" id="rmHistoryCard">
-      <button class="history-card-head" type="button" onclick="toggleHistoryCard('rmHistoryCard','rmHistoryBody')">
-        <span><strong>📦 Raw Material History</strong><small>Material → Date</small></span><b id="rmHistoryChevron">＋</b>
-      </button>
-      <div class="history-card-body" id="rmHistoryBody"></div>
-    </div>
-
-    <div class="history-card" id="feedHistoryCard">
-      <button class="history-card-head" type="button" onclick="toggleHistoryCard('feedHistoryCard','feedHistoryBody')">
-        <span><strong>🌾 Feed Unit History</strong><small>Product → Date</small></span><b id="feedHistoryChevron">＋</b>
-      </button>
-      <div class="history-card-body" id="feedHistoryBody"></div>
-    </div>
-
-    <div class="history-card" id="bagsHistoryCard">
-      <button class="history-card-head" type="button" onclick="toggleHistoryCard('bagsHistoryCard','bagsHistoryBody')">
-        <span><strong>🛍 PP Bags History</strong><small>Product → Date</small></span><b id="bagsHistoryChevron">＋</b>
-      </button>
-      <div class="history-card-body" id="bagsHistoryBody"></div>
-    </div>
-  </div>
-
   <!-- RAW MATERIAL MOVEMENTS -->
   <div class="card">
     <div class="card-title"><h2>📋 Raw Material Movements</h2><span id="dateRawMovements">Data: --</span></div>
@@ -204,6 +180,25 @@
       <button class="report-reset-btn" onclick="resetReportDates()">↺ Reset</button>
     </div>
     <div class="report-note">Select any date range. Reports use the actual data already loaded in the dashboard; no new values are calculated into the source data.</div>
+
+    <div class="report-preview-card">
+      <div class="report-preview-head">
+        <div><strong>👁 Selected Dates Data</strong><small>View the actual records for the selected date range before downloading</small></div>
+        <label>View<select id="reportPreviewSection" onchange="refreshReportPreview()">
+          <option value="raw">📦 Raw Material</option>
+          <option value="feed">🌾 Feed Unit</option>
+          <option value="bags">🛍 PP Bags</option>
+          <option value="production">🏭 Production</option>
+          <option value="premix">🧪 Premix</option>
+          <option value="mix">📊 Monthly Mix</option>
+          <option value="movements">📋 RM Movements</option>
+          <option value="health">⚠️ Data Health</option>
+          <option value="spares">🔧 Spare Parts</option>
+        </select></label>
+      </div>
+      <div class="report-preview-meta" id="reportPreviewMeta"></div>
+      <div class="report-preview-table-wrap" id="reportPreviewTable"><div class="empty">Select dates to view report data.</div></div>
+    </div>
 
     <div class="report-main-card">
       <div class="report-card-head"><div><strong>📕 Complete Dashboard Report</strong><small>Maximum available detail from all plant sections</small></div></div>

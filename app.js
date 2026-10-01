@@ -1775,14 +1775,23 @@ function reportRange(){
 }
 function initReportCenter(){
   refreshReportHistorySelectors();
-  const all=reportAllDates();if(!all.length)return;
+  const all=reportAllDates();
   const f=document.getElementById('reportFromDate'),t=document.getElementById('reportToDate');
-  if(f&&!f.value)f.value=all[Math.max(0,all.length-7)];
-  if(t&&!t.value)t.value=all[all.length-1];
+  if(all.length){
+    if(f&&!f.value)f.value=all[Math.max(0,all.length-7)];
+    if(t&&!t.value)t.value=all[all.length-1];
+  }
+  f?.addEventListener('change',refreshReportPreview);
+  t?.addEventListener('change',refreshReportPreview);
+  document.getElementById('reportHistoryMaterial')?.addEventListener('change',refreshReportPreview);
+  document.getElementById('reportHistoryFeedProduct')?.addEventListener('change',refreshReportPreview);
+  document.getElementById('reportHistoryBagProduct')?.addEventListener('change',refreshReportPreview);
+  refreshReportPreview();
 }
 function resetReportDates(){
   const all=reportAllDates();const f=document.getElementById('reportFromDate'),t=document.getElementById('reportToDate');
   if(f)f.value=all[Math.max(0,all.length-7)]||'';if(t)t.value=all[all.length-1]||'';
+  refreshReportPreview();
   showToast('Report range reset');
 }
 function reportInRange(d,from,to){return !!d&&(!from||d>=from)&&(!to||d<=to)}
@@ -1987,6 +1996,30 @@ function showWhatsAppCopyModal(text){
 }
 async function copyVisibleWhatsApp(){const ta=document.getElementById('reportWhatsAppBox');if(!ta)return;const ok=await copyTextRobust(ta.value);if(ok)showToast('WhatsApp message copied');else{ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);showToast('Tap and hold the message to copy');}}
 async function copyHistoryWhatsApp(kind){const {from,to}=reportRange();if(!from||!to){showToast('No report dates available');return}const text=historyWhatsAppText(kind,from,to);if(!text){showToast('No history for selected range');return}const ok=await copyTextRobust(text);showToast(ok?'WhatsApp message copied':'Tap Copy Message in the message window');showWhatsAppCopyModal(text)}
+
+function refreshReportPreview(){
+  const table=document.getElementById('reportPreviewTable');
+  const meta=document.getElementById('reportPreviewMeta');
+  const select=document.getElementById('reportPreviewSection');
+  if(!table||!select)return;
+  const {from,to}=reportRange();
+  if(!from||!to){
+    table.innerHTML='<div class="empty">No report dates available.</div>';
+    if(meta)meta.textContent='';
+    return;
+  }
+  const section=select.value||'raw';
+  const sec=reportSectionData(section,from,to);
+  const rows=sec.rows||[];
+  if(meta)meta.innerHTML=`<span>${esc(from)} → ${esc(to)}</span><b>${rows.length.toLocaleString('en-IN')} records</b>`;
+  if(!rows.length){
+    table.innerHTML='<div class="history-empty">No data available for the selected date range.</div>';
+    return;
+  }
+  const maxRows=500;
+  const visible=rows.slice(0,maxRows);
+  table.innerHTML=`<table><thead><tr>${sec.headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${visible.map(r=>`<tr>${r.map(v=>`<td>${esc(reportDisplayCell(v))}</td>`).join('')}</tr>`).join('')}</tbody></table>${rows.length>maxRows?`<div class="report-preview-more">Showing first ${maxRows.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} records. Download Excel/PDF for the complete report.</div>`:''}`;
+}
 
 function reportSectionData(section,from,to){
   switch(section){
