@@ -75,12 +75,29 @@
       
     </div>
 
-    <!-- PRODUCTION -->
-    <div class="card">
-      <div class="card-title"><h2>🏭 Production</h2><span id="dateProduction">Data: --</span></div>
-      <div class="production-total" id="productionTotalMain">-- Bags</div>
-      <div class="production-label">Actual Production</div>
-      <div id="productionList"><div class="empty">Loading...</div></div>
+    <!-- PRODUCTION / DISPATCH FLOW -->
+    <div class="card production-flow-card">
+      <div class="card-title"><h2>📊 Today</h2><span id="dateProduction">Data: --</span></div>
+      <div class="production-flow" id="productionFlow">
+        <div class="flow-step flow-production">
+          <span class="flow-icon">🏭</span>
+          <small>Production</small>
+          <strong id="flowProduction">-- MT</strong>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step flow-dispatch">
+          <span class="flow-icon">🚚</span>
+          <small>Dispatch</small>
+          <strong id="flowDispatch">-- MT</strong>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step flow-closing">
+          <span class="flow-icon">📦</span>
+          <small>Closing</small>
+          <strong id="flowClosing">-- MT</strong>
+        </div>
+      </div>
+      <div class="production-flow-caption">Production → Dispatch → Closing</div>
     </div>
 
   </div>

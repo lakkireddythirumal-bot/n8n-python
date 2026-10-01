@@ -2117,32 +2117,12 @@ function productionDisplayRows(){
   });
 }
 function renderProduction(){
-  const rows=productionDisplayRows();
-  const total=rows.reduce((sum,r)=>sum+(num(r.actual_output)||0),0);
-  setText("productionTotalMain",fmtBags(total));
-
-  const el=document.getElementById("productionList");
-  if(!el)return;
-
-  el.innerHTML=rows.map(r=>{
-    const p=r.product||"--";
-    const a=num(r.actual_output);
-    const op=num(r.output_percentage);
-    const loss=num(r.process_loss);
-    const remarks=clean(r.remarks);
-
-    return `<div class="production-row" onclick="openProductDetails('${jsq(p)}')">
-      <div>
-        <div class="row-name">${esc(p)}</div>
-        <div class="prod-meta">
-          Output ${op!==null?fmt(op)+"%":"--"} • Loss ${loss!==null?fmt(loss)+"%":"--"}${remarks?" • "+esc(remarks):""}
-        </div>
-      </div>
-      <div class="row-right">
-        <strong>${fmtBags(a)}</strong>
-        <small>Standard ${fmtBags(r.standard_output)}</small>
-      </div>
-    </div>`;
-  }).join("")||"<div class='empty'>No production data for this date</div>";
+  /* Compact dashboard flow: Production → Dispatch → Closing.
+     Uses the same Feed Unit day totals already used by the dashboard. */
+  const pd=latestTotal("Production_Day_MT");
+  const dd=latestTotal("Dispatch_Day_MT");
+  const closing=latestFeedClosingTotal();
+  setText("flowProduction",fmtMT(pd));
+  setText("flowDispatch",fmtMT(dd));
+  setText("flowClosing",fmtMT(closing));
 }
-
