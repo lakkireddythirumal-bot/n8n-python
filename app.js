@@ -830,6 +830,7 @@ function refreshBagsHistoryTable(){
 function renderDashboard(){
   initReportCenter();
   renderSmartHeader();
+  renderAttentionRequired();
   renderQuick();
   renderMonthlyMix();
   renderControlCenter();
@@ -844,6 +845,40 @@ function renderDashboard(){
   updateSectionDates();
 }
 
+
+function renderAttentionRequired(){
+  const card=document.getElementById("attentionRequiredCard");
+  const list=document.getElementById("attentionList");
+  const count=document.getElementById("attentionCount");
+  if(!card||!list)return;
+
+  const items=managerAttentionItems();
+  const critical=items.filter(x=>x.level==="critical").length;
+  if(count){
+    count.textContent=String(items.length);
+    count.className="attention-count"+(critical?" critical":items.length?" warning":" clear");
+  }
+  card.classList.toggle("has-critical",critical>0);
+  card.classList.toggle("has-warning",critical===0&&items.length>0);
+  card.classList.toggle("is-clear",items.length===0);
+
+  if(!items.length){
+    list.innerHTML=`<div class="attention-clear"><span>✓</span><div><strong>No immediate action</strong><small>Stock, consumption and reconciliation checks are normal for the selected date.</small></div></div>`;
+    return;
+  }
+
+  const visible=items.slice(0,4);
+  list.innerHTML=visible.map((x,i)=>{
+    const criticalLevel=x.level==="critical";
+    return `<button type="button" class="attention-item ${criticalLevel?"critical":"warning"}" onclick="${x.action||"openNotifications()"}">
+      <span class="attention-icon">${criticalLevel?"!":"•"}</span>
+      <span class="attention-copy"><strong>${esc(x.title)}</strong><small>${esc(x.msg)}</small></span>
+      <span class="attention-arrow">›</span>
+    </button>`;
+  }).join("") + (items.length>visible.length
+    ? `<button type="button" class="attention-more" onclick="openNotifications()">+${items.length-visible.length} more attention item${items.length-visible.length===1?"":"s"} · View all →</button>`
+    : "");
+}
 
 function renderSmartHeader(){
   const d=selectedDateForIntelligence()||dateOnly(DATA.report_date)||"";
@@ -1327,6 +1362,18 @@ function managerAttentionItems(){
   reorder.slice(0,8).forEach(m=>items.push({level:"critical",title:m,msg:`Stock ${fmtMaterial(num(getMaterial(m)?.closing)||0,m,getMaterial(m)?.unit||"MT")} • coverage ${(()=>{const s=stockStatus(num(getMaterial(m)?.closing)||0,avgConsumption(m));return s.cover===null?"--":fmt(s.cover)+" days"})()}`,action:`openMaterialDetails('${jsq(m)}')`}));
   reconciliationItems().filter(x=>x.r.status==="MISMATCH").slice(0,8).forEach(x=>items.push({level:"warning",title:x.m,msg:"Stock reconciliation mismatch — check transactions",action:`openMaterialDetails('${jsq(x.m)}')`}));
   abnormalConsumptionItems().slice(0,8).forEach(x=>items.push({level:"warning",title:x.material,msg:`Consumption ${fmt(x.current)} vs avg ${fmt(x.avg)} • ${fmt(Math.abs(x.ratio*100-100))}% ${x.direction==="LOW"?"below":"above"} average`,action:`openMaterialDetails('${jsq(x.material)}')`}));
+  DATA.production.forEach(r=>{
+    const op=num(r.output_percentage);
+    if(op!==null&&op<95){
+      items.push({level:"warning",title:r.product||"Production",msg:`Output ${fmt(op)}% • below 95% target`,action:`openProductionDetails('${jsq(r.product||"")}')`});
+    }
+  });
+  getMaterials().forEach(m=>{
+    const closing=num(getMaterial(m)?.closing);
+    if(closing!==null&&closing<0){
+      items.push({level:"critical",title:m,msg:`Negative closing stock: ${fmt(closing)} ${materialUnit(m,getMaterial(m)?.unit||"MT")}`,action:`openMaterialDetails('${jsq(m)}')`});
+    }
+  });
   const damage=selectedBags().reduce((a,r)=>a+(num(r.damage)||0),0);
   if(damage>0)items.push({level:"warning",title:"PP Bag Damage",msg:`${fmt(damage)} bags damaged on ${selectedDateForIntelligence()}`,action:"openPPBagDetails()"});
   return items;
@@ -2146,32 +2193,3 @@ function renderProduction(){
   }).join("")||"<div class='empty'>No production data for this date</div>";
 }
 
-
-/* =====================================================
-   PAGE NAVIGATION — UI only; existing data/functions preserved
-===================================================== */
-const PAGE_SECTIONS={
-  home:['managementQuickView','premixTransferCard'],
-  inventory:['rawReorderSection','rawMovementsSection','ppBagsSection','sparePartsSection','historySection'],
-  operations:['productionSection','feedUnitSection','monthlyMixSection','historySection'],
-  analytics:['trendsSection'],
-  reports:['reportCenterSection']
-};
-function pageSectionIds(){return Object.values(PAGE_SECTIONS).flat();}
-function showPage(page,scroll=true){
-  page=PAGE_SECTIONS[page]?page:'home';
-  document.body.classList.add('page-mode');
-  const ids=pageSectionIds();
-  ids.forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('page-hidden',!PAGE_SECTIONS[page].includes(id));});
-  document.querySelectorAll('.bottom-nav .nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
-  try{history.replaceState(null,'','#'+page)}catch(e){}
-  if(scroll)window.scrollTo({top:0,behavior:'smooth'});
-  if(page==='inventory')loadSpareParts(false);
-}
-function initPageNavigation(){
-  const hash=(location.hash||'').replace('#','');
-  showPage(PAGE_SECTIONS[hash]?hash:'home',false);
-}
-window.addEventListener('hashchange',()=>{const p=(location.hash||'').replace('#','');showPage(PAGE_SECTIONS[p]?p:'home');});
-
-setTimeout(initPageNavigation,0);
