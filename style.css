@@ -983,24 +983,3 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
   .monthly-mix-tabs{gap:6px;margin:8px 0 7px}
   .monthly-mix-tab{padding:9px 5px;font-size:10.5px}
 }
-
-/* Compact Production → Dispatch → Closing flow */
-.production-flow-card{overflow:hidden}
-.production-flow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:7px;margin:4px 0 2px}
-.flow-step{min-width:0;text-align:center;padding:10px 6px;border:1px solid #e3e8f1;border-radius:14px;background:linear-gradient(145deg,#f8faff,#fff)}
-.flow-icon{display:block;font-size:18px;line-height:1;margin-bottom:4px}
-.flow-step small{display:block;font-size:11px;color:#64748b;font-weight:700}
-.flow-step strong{display:block;margin-top:3px;font-size:18px;line-height:1.15;color:#26354b;font-variant-numeric:tabular-nums;white-space:nowrap}
-.flow-production{background:linear-gradient(145deg,#eef4ff,#fbfdff);border-color:#dce6ff}
-.flow-dispatch{background:linear-gradient(145deg,#effaf5,#fbfffd);border-color:#dceee4}
-.flow-closing{background:linear-gradient(145deg,#fff7ea,#fffdf9);border-color:#f1e2c8}
-.flow-arrow{font-size:20px;font-weight:800;color:#94a3b8;text-align:center}
-.production-flow-caption{text-align:center;font-size:11px;font-weight:700;color:#64748b;margin-top:6px}
-@media(max-width:520px){
-  .production-flow{gap:4px}
-  .flow-step{padding:9px 3px;border-radius:12px}
-  .flow-icon{font-size:16px}
-  .flow-step small{font-size:10px}
-  .flow-step strong{font-size:15px}
-  .flow-arrow{font-size:17px}
-}
