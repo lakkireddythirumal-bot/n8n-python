@@ -932,6 +932,8 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 .history-card-body{display:none;border-top:1px solid #eef0f3;padding:12px}
 .history-card.open .history-card-body{display:block}
 .history-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.history-filter-3{grid-template-columns:1.2fr 1fr 1fr}
+.history-range-note{font-size:10px;color:#64748b;font-weight:700;margin:2px 0 8px}
 .history-filter label{font-size:10px;color:#64748b;font-weight:700;display:flex;flex-direction:column;gap:4px}
 .history-filter select{width:100%;min-width:0;padding:9px 10px;border:1px solid #dbe1e8;border-radius:9px;background:#fff;font-size:12px}
 .history-table{width:100%;overflow-x:auto}
@@ -941,6 +943,6 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 .history-table td{padding:8px 6px;border-top:1px solid #eef0f3;text-align:right;white-space:nowrap}
 .history-empty{padding:12px;text-align:center;color:#64748b;font-size:12px}
 @media(max-width:520px){
-  .history-filter{grid-template-columns:1fr}
+  .history-filter,.history-filter-3{grid-template-columns:1fr}
   .history-card-head{padding:12px}
 }

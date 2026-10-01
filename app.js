@@ -706,71 +706,76 @@ function rmHistoryClosing(rows){
   const r=rows.filter(t=>tType(t)==="CL. STOCK").slice(-1)[0];
   return r? tVal(r):null;
 }
+function historyRangeDefaults(dates){
+  const ds=[...new Set(dates.filter(Boolean))].sort();
+  if(!ds.length)return {all:[],from:"",to:""};
+  const last=ds[ds.length-1];
+  const from=ds[Math.max(0,ds.length-7)];
+  return {all:ds,from,to:last};
+}
+function historyRangeOptions(dates,selected){
+  return dates.slice().sort().reverse().map(d=>`<option value="${esc(d)}" ${d===selected?"selected":""}>${esc(d)}</option>`).join("");
+}
+function inHistoryRange(d,from,to){return !!d && (!from||d>=from) && (!to||d<=to)}
+function rmHistoryRowsForRange(material,from,to){
+  return rmHistoryTransactions(material).filter(t=>inHistoryRange(dateOnly(rowDate(t)),from,to));
+}
 function renderRMHistoryCard(){
   const body=document.getElementById("rmHistoryBody");if(!body)return;
-  const mats=rmHistoryMaterials(),material=mats[0]||"";
-  const dates=rmHistoryDates(material),date=dates[0]||"";
-  body.innerHTML=`<div class="history-filter">
+  const mats=rmHistoryMaterials(),material=mats[0]||"",defaults=historyRangeDefaults(rmHistoryDates(material));
+  body.innerHTML=`<div class="history-filter history-filter-3">
     <label>Material<select id="rmHistoryMaterial" onchange="refreshRMHistoryCard()">${historySelectOptions(mats,material)}</select></label>
-    <label>Date<select id="rmHistoryDate" onchange="refreshRMHistoryTable()">${historyDateOptions(dates,date)}</select></label>
+    <label>From Date<select id="rmHistoryFrom">${historyRangeOptions(defaults.all,defaults.from)}</select></label>
+    <label>To Date<select id="rmHistoryTo">${historyRangeOptions(defaults.all,defaults.to)}</select></label>
   </div><div id="rmHistoryTable"></div>`;
+  document.getElementById("rmHistoryFrom")?.addEventListener("change",refreshRMHistoryTable);
+  document.getElementById("rmHistoryTo")?.addEventListener("change",refreshRMHistoryTable);
   refreshRMHistoryTable();
 }
 function refreshRMHistoryCard(){
   const m=document.getElementById("rmHistoryMaterial")?.value||"";
-  const dates=rmHistoryDates(m),d=dates[0]||"";
-  const ds=document.getElementById("rmHistoryDate");
-  if(ds)ds.innerHTML=historyDateOptions(dates,d);
+  const dates=rmHistoryDates(m),defaults=historyRangeDefaults(dates);
+  const fs=document.getElementById("rmHistoryFrom"),ts=document.getElementById("rmHistoryTo");
+  if(fs)fs.innerHTML=historyRangeOptions(defaults.all,defaults.from);
+  if(ts)ts.innerHTML=historyRangeOptions(defaults.all,defaults.to);
+  fs?.addEventListener("change",refreshRMHistoryTable);ts?.addEventListener("change",refreshRMHistoryTable);
   refreshRMHistoryTable();
 }
 function refreshRMHistoryTable(){
-  const m=document.getElementById("rmHistoryMaterial")?.value||"",d=document.getElementById("rmHistoryDate")?.value||"",el=document.getElementById("rmHistoryTable");
+  const m=document.getElementById("rmHistoryMaterial")?.value||"",from=document.getElementById("rmHistoryFrom")?.value||"",to=document.getElementById("rmHistoryTo")?.value||"",el=document.getElementById("rmHistoryTable");
   if(!el)return;
-  const rows=rmHistoryTransactions(m).filter(t=>dateOnly(rowDate(t))===d);
-  if(!rows.length){el.innerHTML='<div class="history-empty">No history available for selected date.</div>';return}
+  if(from&&to&&from>to){el.innerHTML='<div class="history-empty">From Date must be before To Date.</div>';return}
   const unit=materialUnit(m,getMaterial(m)?.unit||"MT");
-  const received=rmHistoryValue(rows,"received"),consumption=rmHistoryValue(rows,"consumption"),transfer=rmHistoryValue(rows,"transfer"),closing=rmHistoryClosing(rows);
-  el.innerHTML=`<div class="history-table"><table><thead><tr><th>Date</th><th>Received</th><th>Consumption</th><th>Transfer</th><th>Closing</th></tr></thead><tbody><tr><td>${esc(d)}</td><td>${fmt(received)} ${esc(unit)}</td><td>${fmt(consumption)} ${esc(unit)}</td><td>${fmt(transfer)} ${esc(unit)}</td><td>${closing===null?"--":fmt(closing)+" "+esc(unit)}</td></tr></tbody></table></div>`;
+  const rows=rmHistoryTransactions(m).filter(t=>inHistoryRange(dateOnly(rowDate(t)),from,to));
+  const dates=[...new Set(rows.map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
+  if(!dates.length){el.innerHTML='<div class="history-empty">No history available for selected date range.</div>';return}
+  el.innerHTML=`<div class="history-range-note">${esc(from)} → ${esc(to)} • ${dates.length} days</div><div class="history-table"><table><thead><tr><th>Date</th><th>Received</th><th>Consumption</th><th>Transfer</th><th>Closing</th></tr></thead><tbody>${dates.map(d=>{const day=rows.filter(t=>dateOnly(rowDate(t))===d);const received=rmHistoryValue(day,"received"),consumption=rmHistoryValue(day,"consumption"),transfer=rmHistoryValue(day,"transfer"),closing=rmHistoryClosing(day);return `<tr><td>${esc(d)}</td><td>${fmt(received)} ${esc(unit)}</td><td>${fmt(consumption)} ${esc(unit)}</td><td>${fmt(transfer)} ${esc(unit)}</td><td>${closing===null?"--":fmt(closing)+" "+esc(unit)}</td></tr>`}).join("")}</tbody></table></div>`;
 }
 function feedHistoryProducts(){
   const set=new Map();
   (DATA.feedUnitData||[]).forEach(r=>{const p=clean(r.Product||r.product);if(p)set.set(normalize(p),p)});
   return [...set.values()].sort((a,b)=>a.localeCompare(b));
 }
-function feedHistoryRows(product){
-  return (DATA.feedUnitData||[]).filter(r=>normalize(r.Product||r.product)===normalize(product));
-}
-function feedHistoryDates(product){
-  return [...new Set(feedHistoryRows(product).map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean))].sort().reverse();
-}
-function feedHistoryValue(r,names){
-  for(const n of names){const v=num(r[n]);if(v!==null)return v}
-  return null;
-}
+function feedHistoryRows(product){return (DATA.feedUnitData||[]).filter(r=>normalize(r.Product||r.product)===normalize(product));}
+function feedHistoryDates(product){return [...new Set(feedHistoryRows(product).map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean))].sort();}
+function feedHistoryValue(r,names){for(const n of names){const v=num(r[n]);if(v!==null)return v}return null;}
 function renderFeedHistoryCard(){
   const body=document.getElementById("feedHistoryBody");if(!body)return;
-  const products=feedHistoryProducts(),product=products[0]||"",dates=feedHistoryDates(product),date=dates[0]||"";
-  body.innerHTML=`<div class="history-filter">
-    <label>Product<select id="feedHistoryProduct" onchange="refreshFeedHistoryCard()">${historySelectOptions(products,product)}</select></label>
-    <label>Date<select id="feedHistoryDate" onchange="refreshFeedHistoryTable()">${historyDateOptions(dates,date)}</select></label>
-  </div><div id="feedHistoryTable"></div>`;
-  refreshFeedHistoryTable();
+  const products=feedHistoryProducts(),product=products[0]||"",defaults=historyRangeDefaults(feedHistoryDates(product));
+  body.innerHTML=`<div class="history-filter history-filter-3"><label>Product<select id="feedHistoryProduct" onchange="refreshFeedHistoryCard()">${historySelectOptions(products,product)}</select></label><label>From Date<select id="feedHistoryFrom">${historyRangeOptions(defaults.all,defaults.from)}</select></label><label>To Date<select id="feedHistoryTo">${historyRangeOptions(defaults.all,defaults.to)}</select></label></div><div id="feedHistoryTable"></div>`;
+  document.getElementById("feedHistoryFrom")?.addEventListener("change",refreshFeedHistoryTable);document.getElementById("feedHistoryTo")?.addEventListener("change",refreshFeedHistoryTable);refreshFeedHistoryTable();
 }
 function refreshFeedHistoryCard(){
-  const p=document.getElementById("feedHistoryProduct")?.value||"",dates=feedHistoryDates(p),d=dates[0]||"",ds=document.getElementById("feedHistoryDate");
-  if(ds)ds.innerHTML=historyDateOptions(dates,d);
-  refreshFeedHistoryTable();
+  const p=document.getElementById("feedHistoryProduct")?.value||"",dates=feedHistoryDates(p),defaults=historyRangeDefaults(dates),fs=document.getElementById("feedHistoryFrom"),ts=document.getElementById("feedHistoryTo");
+  if(fs)fs.innerHTML=historyRangeOptions(defaults.all,defaults.from);if(ts)ts.innerHTML=historyRangeOptions(defaults.all,defaults.to);
+  fs?.addEventListener("change",refreshFeedHistoryTable);ts?.addEventListener("change",refreshFeedHistoryTable);refreshFeedHistoryTable();
 }
 function refreshFeedHistoryTable(){
-  const p=document.getElementById("feedHistoryProduct")?.value||"",d=document.getElementById("feedHistoryDate")?.value||"",el=document.getElementById("feedHistoryTable");
-  if(!el)return;
-  const rows=feedHistoryRows(p).filter(r=>dateOnly(r.Report_Date||r.report_date||r.date)===d);
-  if(!rows.length){el.innerHTML='<div class="history-empty">No history available for selected date.</div>';return}
-  const r=rows[rows.length-1];
-  const prod=feedHistoryValue(r,["Production_Day_MT","production_day_mt","Production_Day","production_day","Production","production"]);
-  const disp=feedHistoryValue(r,["Dispatch_Day_MT","dispatch_day_mt","Dispatch_Day","dispatch_day","Dispatch","dispatch"]);
-  const close=feedHistoryValue(r,["Closing_Day_MT","closing_day_mt","Closing_Day","closing_day","Closing","closing"]);
-  el.innerHTML=`<div class="history-table"><table><thead><tr><th>Date</th><th>Production</th><th>Dispatch</th><th>Closing</th></tr></thead><tbody><tr><td>${esc(d)}</td><td>${prod===null?"--":fmtFeed(prod,p)}</td><td>${disp===null?"--":fmtFeed(disp,p)}</td><td>${close===null?"--":fmtFeed(close,p)}</td></tr></tbody></table></div>`;
+  const p=document.getElementById("feedHistoryProduct")?.value||"",from=document.getElementById("feedHistoryFrom")?.value||"",to=document.getElementById("feedHistoryTo")?.value||"",el=document.getElementById("feedHistoryTable");if(!el)return;
+  if(from&&to&&from>to){el.innerHTML='<div class="history-empty">From Date must be before To Date.</div>';return}
+  const rows=feedHistoryRows(p),dates=[...new Set(rows.map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(d=>inHistoryRange(d,from,to)))].sort();
+  if(!dates.length){el.innerHTML='<div class="history-empty">No history available for selected date range.</div>';return}
+  el.innerHTML=`<div class="history-range-note">${esc(from)} → ${esc(to)} • ${dates.length} days</div><div class="history-table"><table><thead><tr><th>Date</th><th>Production</th><th>Dispatch</th><th>Closing</th></tr></thead><tbody>${dates.map(d=>{const rr=rows.filter(r=>dateOnly(r.Report_Date||r.report_date||r.date)===d);const r=rr[rr.length-1];const prod=feedHistoryValue(r,["Production_Day_MT","production_day_mt","Production_Day","production_day","Production","production"]),disp=feedHistoryValue(r,["Dispatch_Day_MT","dispatch_day_mt","Dispatch_Day","dispatch_day","Dispatch","dispatch"]),close=feedHistoryValue(r,["Closing_Day_MT","closing_day_mt","Closing_Day","closing_day","Closing","closing"]);return `<tr><td>${esc(d)}</td><td>${prod===null?"--":fmtFeed(prod,p)}</td><td>${disp===null?"--":fmtFeed(disp,p)}</td><td>${close===null?"--":fmtFeed(close,p)}</td></tr>`}).join("")}</tbody></table></div>`;
 }
 function bagsHistoryProducts(){
   const set=new Map();
@@ -778,36 +783,27 @@ function bagsHistoryProducts(){
   (DATA.bagsHistory||[]).forEach(r=>{const p=clean(r.product||"PP Bags");if(p)set.set(normalize(p),p)});
   return [...set.values()].sort((a,b)=>a.localeCompare(b));
 }
-function bagsHistoryRows(product){
-  const rows=(DATA.bagsHistory||[]).filter(r=>normalize(r.product||"PP Bags")===normalize(product));
-  if(rows.length)return rows;
-  return (DATA.bags||[]).filter(r=>normalize(r.product||"PP Bags")===normalize(product));
-}
-function bagsHistoryDates(product){
-  return [...new Set(bagsHistoryRows(product).map(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)).filter(Boolean))].sort().reverse();
-}
+function bagsHistoryRows(product){const rows=(DATA.bagsHistory||[]).filter(r=>normalize(r.product||"PP Bags")===normalize(product));return rows.length?rows:(DATA.bags||[]).filter(r=>normalize(r.product||"PP Bags")===normalize(product));}
+function bagsHistoryDates(product){return [...new Set(bagsHistoryRows(product).map(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)).filter(Boolean))].sort();}
 function renderBagsHistoryCard(){
   const body=document.getElementById("bagsHistoryBody");if(!body)return;
-  const products=bagsHistoryProducts(),product=products[0]||"",dates=bagsHistoryDates(product),date=dates[0]||"";
-  body.innerHTML=`<div class="history-filter">
-    <label>Product<select id="bagsHistoryProduct" onchange="refreshBagsHistoryCard()">${historySelectOptions(products,product)}</select></label>
-    <label>Date<select id="bagsHistoryDate" onchange="refreshBagsHistoryTable()">${historyDateOptions(dates,date)}</select></label>
-  </div><div id="bagsHistoryTable"></div>`;
-  refreshBagsHistoryTable();
+  const products=bagsHistoryProducts(),product=products[0]||"",defaults=historyRangeDefaults(bagsHistoryDates(product));
+  body.innerHTML=`<div class="history-filter history-filter-3"><label>Product<select id="bagsHistoryProduct" onchange="refreshBagsHistoryCard()">${historySelectOptions(products,product)}</select></label><label>From Date<select id="bagsHistoryFrom">${historyRangeOptions(defaults.all,defaults.from)}</select></label><label>To Date<select id="bagsHistoryTo">${historyRangeOptions(defaults.all,defaults.to)}</select></label></div><div id="bagsHistoryTable"></div>`;
+  document.getElementById("bagsHistoryFrom")?.addEventListener("change",refreshBagsHistoryTable);document.getElementById("bagsHistoryTo")?.addEventListener("change",refreshBagsHistoryTable);refreshBagsHistoryTable();
 }
 function refreshBagsHistoryCard(){
-  const p=document.getElementById("bagsHistoryProduct")?.value||"",dates=bagsHistoryDates(p),d=dates[0]||"",ds=document.getElementById("bagsHistoryDate");
-  if(ds)ds.innerHTML=historyDateOptions(dates,d);
-  refreshBagsHistoryTable();
+  const p=document.getElementById("bagsHistoryProduct")?.value||"",dates=bagsHistoryDates(p),defaults=historyRangeDefaults(dates),fs=document.getElementById("bagsHistoryFrom"),ts=document.getElementById("bagsHistoryTo");
+  if(fs)fs.innerHTML=historyRangeOptions(defaults.all,defaults.from);if(ts)ts.innerHTML=historyRangeOptions(defaults.all,defaults.to);
+  fs?.addEventListener("change",refreshBagsHistoryTable);ts?.addEventListener("change",refreshBagsHistoryTable);refreshBagsHistoryTable();
 }
 function refreshBagsHistoryTable(){
-  const p=document.getElementById("bagsHistoryProduct")?.value||"",d=document.getElementById("bagsHistoryDate")?.value||"",el=document.getElementById("bagsHistoryTable");
-  if(!el)return;
-  const rows=bagsHistoryRows(p).filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===d);
-  if(!rows.length){el.innerHTML='<div class="history-empty">No history available for selected date.</div>';return}
-  const r=rows[rows.length-1],v=k=>num(r[k]);
-  el.innerHTML=`<div class="history-table"><table><thead><tr><th>Date</th><th>Received</th><th>Issue</th><th>Damage</th><th>Closing</th></tr></thead><tbody><tr><td>${esc(d)}</td><td>${v("received")===null?"--":fmt(v("received"))}</td><td>${v("issue")===null?"--":fmt(v("issue"))}</td><td>${v("damage")===null?"--":fmt(v("damage"))}</td><td>${v("closing")===null?"--":fmt(v("closing"))}</td></tr></tbody></table></div>`;
+  const p=document.getElementById("bagsHistoryProduct")?.value||"",from=document.getElementById("bagsHistoryFrom")?.value||"",to=document.getElementById("bagsHistoryTo")?.value||"",el=document.getElementById("bagsHistoryTable");if(!el)return;
+  if(from&&to&&from>to){el.innerHTML='<div class="history-empty">From Date must be before To Date.</div>';return}
+  const rows=bagsHistoryRows(p),dates=[...new Set(rows.map(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)).filter(d=>inHistoryRange(d,from,to)))].sort();
+  if(!dates.length){el.innerHTML='<div class="history-empty">No history available for selected date range.</div>';return}
+  el.innerHTML=`<div class="history-range-note">${esc(from)} → ${esc(to)} • ${dates.length} days</div><div class="history-table"><table><thead><tr><th>Date</th><th>Received</th><th>Issue</th><th>Damage</th><th>Closing</th></tr></thead><tbody>${dates.map(d=>{const rr=rows.filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===d),r=rr[rr.length-1],v=k=>num(r[k]);return `<tr><td>${esc(d)}</td><td>${v("received")===null?"--":fmt(v("received"))}</td><td>${v("issue")===null?"--":fmt(v("issue"))}</td><td>${v("damage")===null?"--":fmt(v("damage"))}</td><td>${v("closing")===null?"--":fmt(v("closing"))}</td></tr>`}).join("")}</tbody></table></div>`;
 }
+
 
 function renderDashboard(){
   renderSmartHeader();
