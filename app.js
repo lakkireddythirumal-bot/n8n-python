@@ -1673,6 +1673,12 @@ function setSpareTab(btn,tab){
   if(input)input.value="";
   renderSpareParts("");
 }
+function toggleSpareCard(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.toggle('expanded');
+}
+
 function renderSpareParts(query=""){
   const el=document.getElementById('sparePartsList');
   if(!el)return;
@@ -1680,10 +1686,13 @@ function renderSpareParts(query=""){
   const rows=Array.isArray(SPARE_DATA[spareTab])?SPARE_DATA[spareTab]:[];
   const filtered=q?rows.filter(r=>normalize(Object.values(r||{}).join(" ")).includes(q)):rows;
   updateSectionDates();
-  if(!filtered.length){el.innerHTML=`<div class="empty">No ${spareTab==='SPARE_STOCK'?'spare stock':spareTab==='SPARE_ORDERS'?'orders':'employee messages'} found.</div>`;return;}
+  if(!filtered.length){
+    el.innerHTML=`<div class="empty">No ${spareTab==='SPARE_STOCK'?'spare stock':spareTab==='SPARE_ORDERS'?'orders':'employee messages'} found.</div>`;
+    return;
+  }
 
   if(spareTab==='SPARE_STOCK'){
-    el.innerHTML=filtered.map(r=>{
+    el.innerHTML=filtered.map((r,i)=>{
       const name=spareVal(r,['NAME','Name','PART_NAME','Part_Name','PART NAME'])||'Unnamed Part';
       const category=spareVal(r,['CATEGORY','Category']);
       const size=spareVal(r,['SIZE','Size']);
@@ -1694,35 +1703,59 @@ function renderSpareParts(query=""){
       const location=spareVal(r,['LOCATION','Location']);
       const n=num(stock), rl=num(reorder);
       const low=rl!==null && n!==null && n<=rl;
-      return `<div class="spare-stock-row ${low?'spare-low-stock':''}">
-        <div class="spare-main"><strong>${esc(name)}</strong><small>${esc(category||'')}${size?' • '+esc(size):''}${code?' • Code: '+esc(code):''}</small></div>
-        <div class="spare-stock-right"><strong>${esc(fmt(stock))}</strong><small>${esc(unit)}${low?' • Reorder':''}</small></div>
-        ${location?`<div class="spare-location">📍 ${esc(location)}</div>`:''}
+      const id=`spareStockCard_${i}`;
+      return `<div id="${id}" class="spare-stock-row spare-collapsible ${low?'spare-low-stock':''}" onclick="toggleSpareCard('${id}')">
+        <div class="spare-compact-main">
+          <div class="spare-main"><strong>${esc(name)}</strong><small>${esc(category||'')}${size?' • '+esc(size):''}${code?' • Code: '+esc(code):''}</small></div>
+          <div class="spare-stock-right"><strong>${esc(fmt(stock))}</strong><small>${esc(unit)}${low?' • Reorder':''}</small></div>
+          <span class="spare-expand-icon">⌄</span>
+        </div>
+        <div class="spare-expand-details">
+          <div class="spare-detail-grid">
+            ${category?`<div><b>Category</b><span>${esc(category)}</span></div>`:''}
+            ${size?`<div><b>Size</b><span>${esc(size)}</span></div>`:''}
+            ${code?`<div><b>Code</b><span>${esc(code)}</span></div>`:''}
+            <div><b>Stock</b><span>${esc(fmt(stock))} ${esc(unit)}</span></div>
+            ${reorder?`<div><b>Reorder Level</b><span>${esc(fmt(reorder))} ${esc(unit)}</span></div>`:''}
+            ${location?`<div><b>Location</b><span>📍 ${esc(location)}</span></div>`:''}
+          </div>
+        </div>
       </div>`;
     }).join('');
     return;
   }
 
   if(spareTab==='SPARE_ORDERS'){
-    el.innerHTML=filtered.map(r=>{
+    el.innerHTML=filtered.map((r,i)=>{
       const date=spareVal(r,['DATE','Date']);
       const title=spareVal(r,['ORDER_TITLE','Order_Title','ORDER TITLE']);
       const msg=spareVal(r,['ORDER_MESSAGE','Order_Message','ORDER MESSAGE','MESSAGE','Message']);
       const status=spareVal(r,['STATUS','Status']);
-      return `<div class="spare-message-card"><div class="spare-message-head"><strong>${esc(title||'Spare Parts Order')}</strong><small>${esc(date)}</small></div>${status?`<span class="spare-status">${esc(status)}</span>`:''}<div class="spare-message-body">${esc(msg||'')}</div></div>`;
+      const id=`spareOrderCard_${i}`;
+      return `<div id="${id}" class="spare-message-card spare-collapsible" onclick="toggleSpareCard('${id}')">
+        <div class="spare-message-head"><strong>${esc(title||'Spare Parts Order')}</strong><small>${esc(date)}</small><span class="spare-expand-icon">⌄</span></div>
+        ${status?`<span class="spare-status">${esc(status)}</span>`:''}
+        <div class="spare-expand-details"><div class="spare-message-body">${esc(msg||'')}</div></div>
+      </div>`;
     }).join('');
     return;
   }
 
-  el.innerHTML=filtered.map(r=>{
+  el.innerHTML=filtered.map((r,i)=>{
     const date=spareVal(r,['DATE','Date']);
     const employee=spareVal(r,['EMPLOYEE','Employee','EMPLOYEE_NAME','Employee_Name']);
     const msg=spareVal(r,['MESSAGE','Message','EMPLOYEE_MESSAGE','Employee_Message']);
     const category=spareVal(r,['CATEGORY','Category']);
     const status=spareVal(r,['STATUS','Status']);
-    return `<div class="spare-message-card"><div class="spare-message-head"><strong>${esc(employee||'Employee Message')}</strong><small>${esc(date)}</small></div>${category?`<div class="spare-message-meta">${esc(category)}${status?' • '+esc(status):''}</div>`:''}<div class="spare-message-body">${esc(msg||'')}</div></div>`;
+    const id=`spareEmployeeCard_${i}`;
+    return `<div id="${id}" class="spare-message-card spare-collapsible" onclick="toggleSpareCard('${id}')">
+      <div class="spare-message-head"><strong>${esc(employee||'Employee Message')}</strong><small>${esc(date)}</small><span class="spare-expand-icon">⌄</span></div>
+      ${category?`<div class="spare-message-meta">${esc(category)}${status?' • '+esc(status):''}</div>`:''}
+      <div class="spare-expand-details"><div class="spare-message-body">${esc(msg||'')}</div></div>
+    </div>`;
   }).join('');
 }
+
 async function loadSpareParts(showToastOnSuccess=false){
   const el=document.getElementById('sparePartsList');
   if(el && !showToastOnSuccess)el.innerHTML='<div class="empty">Loading spare parts...</div>';
