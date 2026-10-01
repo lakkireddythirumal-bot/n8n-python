@@ -1105,3 +1105,56 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
   .cover-badge{padding:4px 7px 4px 4px!important;font-size:11px!important;gap:4px!important;}
   .cover-badge .status-dot{width:17px!important;height:17px!important;}
 }
+/* COVER VERTICAL POLISH — status dot above Cover days */
+.reorder-card-top .cover-badge{
+  flex-direction:column!important;
+  justify-content:center!important;
+  align-items:center!important;
+  gap:2px!important;
+  min-width:48px!important;
+  padding:5px 7px 6px!important;
+  border-radius:12px!important;
+}
+.reorder-card-top .cover-badge .status-dot{
+  width:17px!important;
+  height:17px!important;
+}
+.reorder-card-top .cover-badge .cover-label{
+  font-size:7px!important;
+  line-height:1!important;
+  font-weight:800!important;
+  letter-spacing:.45px!important;
+  text-transform:uppercase!important;
+  opacity:.72;
+}
+.reorder-card-top .cover-badge strong{
+  font-size:12px!important;
+  line-height:1.05!important;
+  font-weight:900!important;
+}
+@media(max-width:600px){
+  .reorder-card-top .cover-badge{min-width:46px!important;padding:4px 6px 5px!important;}
+  .reorder-card-top .cover-badge .status-dot{width:16px!important;height:16px!important;}
+  .reorder-card-top .cover-badge .cover-label{font-size:6.5px!important;}
+  .reorder-card-top .cover-badge strong{font-size:11px!important;}
+}
+
+/* FINAL EXACT RAW MATERIAL CARD LAYOUT */
+.reorder-card-top{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px!important;}
+.reorder-title-wrap{display:flex!important;align-items:center!important;gap:7px!important;min-width:0!important;flex:1!important;}
+.cover-badge{flex-direction:row!important;align-items:center!important;justify-content:center!important;gap:6px!important;min-width:0!important;padding:6px 10px 6px 7px!important;border-radius:999px!important;}
+.cover-badge .status-dot{width:16px!important;height:16px!important;flex:0 0 16px!important;}
+.cover-badge strong{font-size:14px!important;line-height:1!important;font-weight:900!important;}
+.cover-badge .cover-label{display:none!important;}
+.reorder-card-metrics{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12px!important;margin-top:8px!important;padding-top:8px!important;border-top:1px solid #edf0f5!important;}
+.reorder-card-metrics span{text-align:left!important;}
+.reorder-card-metrics span:last-child{text-align:right!important;}
+@media(max-width:600px){
+  .reorder-card-top{gap:7px!important;}
+  .reorder-title-wrap{gap:5px!important;}
+  .reorder-status-label{font-size:7px!important;padding:3px 5px!important;}
+  .cover-badge{padding:5px 9px 5px 6px!important;gap:5px!important;}
+  .cover-badge .status-dot{width:15px!important;height:15px!important;flex-basis:15px!important;}
+  .cover-badge strong{font-size:13px!important;}
+  .reorder-card-metrics{grid-template-columns:1fr 1fr!important;gap:8px!important;}
+}
