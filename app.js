@@ -1701,6 +1701,7 @@ function reportRange(){
   return {from,to,all};
 }
 function initReportCenter(){
+  refreshReportHistorySelectors();
   const all=reportAllDates();if(!all.length)return;
   const f=document.getElementById('reportFromDate'),t=document.getElementById('reportToDate');
   if(f&&!f.value)f.value=all[Math.max(0,all.length-7)];
@@ -1714,7 +1715,18 @@ function resetReportDates(){
 function reportInRange(d,from,to){return !!d&&(!from||d>=from)&&(!to||d<=to)}
 function reportDate(v){return dateOnly(v)}
 function reportNum(v){const n=Number(v);return Number.isFinite(n)?n:0}
-function reportFmt(v){return reportNum(v).toLocaleString('en-IN',{maximumFractionDigits:2})}
+function reportFmt(v){return reportNum(v).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:2})}
+function reportDisplayCell(v){
+  if(v===null||v===undefined||v==='')return '';
+  const n=Number(v);
+  if(Number.isFinite(n))return n.toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:2});
+  return String(v);
+}
+function reportRound(v){
+  const n=Number(v);
+  return Number.isFinite(n)?Math.round(n*100)/100:v;
+}
+function reportCleanRows(rows){return (rows||[]).map(r=>r.map(reportRound));}
 function reportTypeTotals(rows,from,to){
   const out={};
   (rows||[]).forEach(t=>{const d=reportDate(rowDate(t));if(!reportInRange(d,from,to))return;const ty=tType(t);out[ty]=(out[ty]||0)+tVal(t)});
@@ -1820,6 +1832,89 @@ function reportMixRows(from,to){
   rows.forEach(r=>{const t=totals[r.Month+'|'+r.Type]||0;r.Percent=t?r.Value_MT/t*100:0});
   return rows;
 }
+function reportMaterialHistoryRows(material,from,to){
+  const rows=rmHistoryTransactions(material).filter(t=>inHistoryRange(dateOnly(rowDate(t)),from,to));
+  const unit=materialUnit(material,getMaterial(material)?.unit||"MT");
+  const dates=[...new Set(rows.map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
+  return dates.map(d=>{
+    const day=rows.filter(t=>dateOnly(rowDate(t))===d);
+    return {Date:d,Material:material,Unit:unit,
+      Received:rmHistoryValue(day,"received"),Consumption:rmHistoryValue(day,"consumption"),
+      Transfer:rmHistoryValue(day,"transfer"),Closing:rmHistoryClosing(day)};
+  });
+}
+function reportProductHistoryRows(kind,product,from,to){
+  if(kind==='feed'){
+    return feedHistoryDates(product).filter(d=>inHistoryRange(d,from,to)).map(d=>{
+      const rr=feedHistoryRows(product).filter(r=>dateOnly(r.Report_Date||r.report_date||r.date)===d),r=rr[rr.length-1]||{};
+      return {Date:d,Product:product,
+        Production:feedHistoryValue(r,['Production_Day_MT','production_day_mt','Production_Day','production_day','Production','production']),
+        Dispatch:feedHistoryValue(r,['Dispatch_Day_MT','dispatch_day_mt','Dispatch_Day','dispatch_day','Dispatch','dispatch']),
+        Closing:feedHistoryValue(r,['Closing_Day_MT','closing_day_mt','Closing_Day','closing_day','Closing','closing'])};
+    });
+  }
+  return bagsHistoryDates(product).filter(d=>inHistoryRange(d,from,to)).map(d=>{
+    const rr=bagsHistoryRows(product).filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===d),r=rr[rr.length-1]||{};
+    return {Date:d,Product:product,Received:num(r.received),Issue:num(r.issue),Damage:num(r.damage),Closing:num(r.closing)};
+  });
+}
+function reportHistorySelection(kind){
+  const material=document.getElementById('reportHistoryMaterial')?.value||rmHistoryMaterials()[0]||'';
+  const feed=document.getElementById('reportHistoryFeedProduct')?.value||feedHistoryProducts()[0]||'';
+  const bags=document.getElementById('reportHistoryBagProduct')?.value||bagsHistoryProducts()[0]||'';
+  return kind==='material'?material:(kind==='feed'?feed:bags);
+}
+function refreshReportHistorySelectors(){
+  const fill=(id,items)=>{const el=document.getElementById(id);if(!el)return;const cur=el.value;el.innerHTML=historySelectOptions(items,items.includes(cur)?cur:(items[0]||''));};
+  fill('reportHistoryMaterial',rmHistoryMaterials());
+  fill('reportHistoryFeedProduct',feedHistoryProducts());
+  fill('reportHistoryBagProduct',bagsHistoryProducts());
+}
+function reportHistoryData(kind,from,to){
+  const selected=reportHistorySelection(kind);
+  if(kind==='material')return {title:'Raw Material Material-wise History',headers:['Date','Material','Unit','Received','Consumption','Transfer','Closing'],rows:reportMaterialHistoryRows(selected,from,to).map(r=>[r.Date,r.Material,r.Unit,r.Received,r.Consumption,r.Transfer,r.Closing===null?'':r.Closing]),selected};
+  if(kind==='feed')return {title:'Feed Unit Product-wise History',headers:['Date','Product','Production','Dispatch','Closing'],rows:reportProductHistoryRows('feed',selected,from,to).map(r=>[r.Date,r.Product,r.Production??'',r.Dispatch??'',r.Closing??'']),selected};
+  return {title:'PP Bags Product-wise History',headers:['Date','Product','Received','Issue','Damage','Closing'],rows:reportProductHistoryRows('bags',selected,from,to).map(r=>[r.Date,r.Product,r.Received??'',r.Issue??'',r.Damage??'',r.Closing??'']),selected};
+}
+function generateHistoryReportPDF(kind){
+  const {from,to}=reportRange();if(!from||!to){showToast('No report dates available');return}
+  const sec=reportHistoryData(kind,from,to);if(!sec.rows.length){showToast('No history for selected range');return}
+  const title=sec.title+' • '+sec.selected;
+  if(!(window.jspdf&&window.jspdf.jsPDF)){reportPdfFallback(title,[sec]);return;}
+  try{
+    const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    doc.setFontSize(16);doc.text(title,14,14);doc.setFontSize(9);doc.text('Period: '+from+' → '+to+'   Generated: '+new Date().toLocaleString('en-IN'),14,20);
+    doc.autoTable({startY:25,head:[sec.headers],body:reportCleanRows(sec.rows),margin:{left:10,right:10},styles:{fontSize:7,cellPadding:2},headStyles:{fillColor:[39,58,86],textColor:255},alternateRowStyles:{fillColor:[248,250,252]},theme:'grid',didDrawPage:d=>{doc.setFontSize(7);doc.text('Feed Plant Report • '+from+' → '+to,10,202);}});
+    doc.save('Feed_Plant_'+reportSafeName(sec.title)+'_'+reportSafeName(sec.selected)+'_'+reportFileStamp()+'.pdf');showToast('History PDF generated');
+  }catch(e){console.error(e);reportPdfFallback(title,[sec])}
+}
+function exportHistoryReportExcel(kind){
+  const {from,to}=reportRange();if(!from||!to){showToast('No report dates available');return}
+  const sec=reportHistoryData(kind,from,to);if(!sec.rows.length){showToast('No history for selected range');return}
+  if(!(window.XLSX&&window.XLSX.utils)){showToast('Excel engine not loaded');return}
+  const wb=XLSX.utils.book_new(),aoa=[sec.headers,...sec.rows.map(r=>r.map(reportRound))],ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=sec.headers.map(h=>({wch:Math.max(12,Math.min(28,String(h).length+6))}));XLSX.utils.book_append_sheet(wb,ws,'History');
+  XLSX.writeFile(wb,'Feed_Plant_'+reportSafeName(sec.title)+'_'+reportSafeName(sec.selected)+'_'+reportFileStamp()+'.xlsx');showToast('History Excel exported');
+}
+function historyWhatsAppText(kind,from,to){
+  const sec=reportHistoryData(kind,from,to),s0=kind==='material'?'📦 RAW MATERIAL HISTORY':kind==='feed'?'🌾 FEED UNIT HISTORY':'🛍 PP BAGS HISTORY';
+  let s=s0+'\n'+sec.selected+'\n'+from+' to '+to+'\n\n';
+  sec.rows.forEach(r=>{if(kind==='material')s+=r[0]+' | Received: '+reportDisplayCell(r[3])+' '+r[2]+' | Consumption: '+reportDisplayCell(r[4])+' '+r[2]+' | Transfer: '+reportDisplayCell(r[5])+' '+r[2]+' | Closing: '+(r[6]===''?'--':reportDisplayCell(r[6]))+' '+r[2]+'\n';
+    else if(kind==='feed')s+=r[0]+' | Production: '+reportDisplayCell(r[2])+' | Dispatch: '+reportDisplayCell(r[3])+' | Closing: '+(r[4]===''?'--':reportDisplayCell(r[4]))+'\n';
+    else s+=r[0]+' | Received: '+reportDisplayCell(r[2])+' | Issue: '+reportDisplayCell(r[3])+' | Damage: '+reportDisplayCell(r[4])+' | Closing: '+reportDisplayCell(r[5])+'\n';});
+  return s.trim();
+}
+async function copyTextRobust(text){
+  try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text);return true}}catch(e){}
+  const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.left='-9999px';ta.style.top='0';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();ta.setSelectionRange(0,text.length);
+  let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();return ok;
+}
+function showWhatsAppCopyModal(text){
+  showModal('📱 WhatsApp Message',`<div class="detail-section"><div class="small-note">Message ready. Tap Copy Message, then paste directly into WhatsApp.</div><textarea id="reportWhatsAppBox" readonly style="width:100%;min-height:260px;box-sizing:border-box;border:1px solid #dfe5ee;border-radius:10px;padding:10px;font:12px/1.5 inherit;resize:vertical;background:#fff">${esc(text)}</textarea><div style="display:flex;gap:8px;margin-top:9px"><button class="more-toggle" onclick="copyVisibleWhatsApp()">📋 Copy Message</button><button class="more-toggle" onclick="closeModal()">Close</button></div></div>`);
+}
+async function copyVisibleWhatsApp(){const ta=document.getElementById('reportWhatsAppBox');if(!ta)return;const ok=await copyTextRobust(ta.value);if(ok)showToast('WhatsApp message copied');else{ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);showToast('Tap and hold the message to copy');}}
+async function copyHistoryWhatsApp(kind){const {from,to}=reportRange();if(!from||!to){showToast('No report dates available');return}const text=historyWhatsAppText(kind,from,to);if(!text){showToast('No history for selected range');return}const ok=await copyTextRobust(text);showToast(ok?'WhatsApp message copied':'Tap Copy Message in the message window');showWhatsAppCopyModal(text)}
+
 function reportSectionData(section,from,to){
   switch(section){
     case 'raw':return {title:'Raw Material',headers:['Date','Material','Unit','Received','Consumption','Transfer','Closing'],rows:reportRawRows(from,to).map(r=>[r.Date,r.Material,r.Unit,r.Received,r.Consumption,r.Transfer,r.Closing===null?'':r.Closing])};
@@ -1846,7 +1941,7 @@ function reportPdfFallback(title,sections){
   const w=window.open('','_blank');if(!w){showToast('Popup blocked — allow popups for PDF');return;}
   const css=`<style>body{font-family:Arial,sans-serif;padding:24px;color:#202938}h1{font-size:22px}h2{font-size:16px;margin-top:24px;border-bottom:1px solid #ddd;padding-bottom:6px}table{border-collapse:collapse;width:100%;margin:8px 0 20px;font-size:10px}th,td{border:1px solid #ddd;padding:5px;text-align:left}th{background:#f1f4f8}small{color:#667085}@media print{.page{break-before:page}}</style>`;
   w.document.write('<!doctype html><html><head><title>'+esc(title)+'</title>'+css+'</head><body><h1>'+esc(title)+'</h1><small>Generated: '+esc(new Date().toLocaleString('en-IN'))+'</small>');
-  sections.forEach((sec,i)=>{w.document.write((i?'':'')+'<div class="page"><h2>'+esc(sec.title)+'</h2><table><thead><tr>'+sec.headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+sec.rows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(v===null||v===undefined?'':v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>')});
+  sections.forEach((sec,i)=>{w.document.write((i?'':'')+'<div class="page"><h2>'+esc(sec.title)+'</h2><table><thead><tr>'+sec.headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+sec.rows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(reportDisplayCell(v))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>')});
   w.document.write('</body></html>');w.document.close();setTimeout(()=>w.print(),500);
 }
 function generateReportPDF(section){
@@ -1861,7 +1956,7 @@ function generateReportPDF(section){
     sections.forEach((sec,i)=>{
       if(i>0){doc.addPage();y=14;}
       doc.setFontSize(12);doc.text(sec.title,14,y);y+=4;
-      doc.autoTable({startY:y,head:[sec.headers],body:sec.rows,margin:{left:10,right:10},styles:{fontSize:7,cellPadding:2},headStyles:{fillColor:[39,58,86],textColor:255},alternateRowStyles:{fillColor:[248,250,252]},theme:'grid',didDrawPage:data=>{doc.setFontSize(7);doc.text('Feed Plant Report • '+from+' → '+to,10,202);}});
+      doc.autoTable({startY:y,head:[sec.headers],body:reportCleanRows(sec.rows),margin:{left:10,right:10},styles:{fontSize:7,cellPadding:2},headStyles:{fillColor:[39,58,86],textColor:255},alternateRowStyles:{fillColor:[248,250,252]},theme:'grid',didDrawPage:data=>{doc.setFontSize(7);doc.text('Feed Plant Report • '+from+' → '+to,10,202);}});
     });
     doc.save('Feed_Plant_'+reportSafeName(section==='complete'?'Complete_Report':sections[0].title)+'_'+reportFileStamp()+'.pdf');showToast('PDF generated');
   }catch(e){console.error(e);reportPdfFallback(title,sections)}
@@ -1871,7 +1966,7 @@ function exportReportExcel(section){
   const sections=section==='complete'?reportCompleteSections(from,to):[reportSectionData(section,from,to)];
   if(!(window.XLSX&&window.XLSX.utils)){showToast('Excel engine not loaded — use PDF/CSV fallback');return}
   const wb=XLSX.utils.book_new();
-  sections.forEach((sec,i)=>{const aoa=[sec.headers,...sec.rows];const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=sec.headers.map(h=>({wch:Math.max(12,Math.min(28,String(h).length+5))}));XLSX.utils.book_append_sheet(wb,ws,clean(sec.title).slice(0,31)||('Report'+(i+1)));});
+  sections.forEach((sec,i)=>{const aoa=[sec.headers,...sec.rows.map(r=>r.map(reportRound))];const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=sec.headers.map(h=>({wch:Math.max(12,Math.min(28,String(h).length+5))}));XLSX.utils.book_append_sheet(wb,ws,clean(sec.title).slice(0,31)||('Report'+(i+1)));});
   XLSX.writeFile(wb,'Feed_Plant_'+reportSafeName(section==='complete'?'Complete_Report':sections[0].title)+'_'+reportFileStamp()+'.xlsx');showToast('Excel exported');
 }
 function reportWhatsAppText(section,from,to){
@@ -1893,9 +1988,9 @@ function reportWhatsAppText(section,from,to){
 async function copyReportWhatsApp(section){
   const {from,to}=reportRange();if(!from||!to){showToast('No report dates available');return}
   const text=reportWhatsAppText(section,from,to);
-  try{await navigator.clipboard.writeText(text);showToast('WhatsApp message copied');}
-  catch(e){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();showToast('WhatsApp message copied');}
-  showModal('📱 WhatsApp Message',`<div class="detail-section"><div class="small-note">Message copied. Paste it into WhatsApp.</div><pre style="white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.5;background:#f7f9fc;padding:10px;border-radius:10px;max-height:55vh;overflow:auto">${esc(text)}</pre><button class="more-toggle" onclick="closeModal()">Close</button></div>`);
+  const ok=await copyTextRobust(text);
+  showToast(ok?'WhatsApp message copied':'Tap Copy Message in the message window');
+  showWhatsAppCopyModal(text);
 }
 
 /* =====================================================

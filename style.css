@@ -968,3 +968,5 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 .report-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
 .report-section-grid .report-main-card{margin:0}
 @media(max-width:700px){.report-range-bar{grid-template-columns:1fr 1fr}.report-reset-btn{grid-column:1/-1}.report-section-grid{grid-template-columns:1fr}.report-actions button{flex:1;min-width:0}}
+
+.report-history-filter{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:9px}.report-history-filter label{font-size:11px;font-weight:800;color:#667085;display:flex;flex-direction:column;gap:5px}.report-history-filter select{height:40px;border:1px solid #dfe5ee;border-radius:11px;padding:0 10px;background:#fff;color:#25324a;font-weight:700;min-width:0}.history-report-card{background:linear-gradient(145deg,#ffffff,#f7faff)!important}
