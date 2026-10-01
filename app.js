@@ -770,12 +770,42 @@ function showModal(title,html){setText("modalTitle",title);document.getElementBy
 function closeModal(){document.getElementById("modal").classList.remove("show")}
 function outsideClose(e){if(e.target.id==="modal")closeModal()}
 function detail(label,value){return `<div class="detail-row"><span>${esc(label)}</span><strong>${esc(value??"--")}</strong></div>`}
+function materialDateHistory(material){
+  const target=normalize(material);
+  const rows=(DATA.stockHistory||[]).filter(t=>normalize(t.material)===target);
+  const byDate=new Map();
+  rows.forEach(t=>{
+    const d=dateOnly(rowDate(t)); if(!d)return;
+    if(!byDate.has(d))byDate.set(d,{received:0,consumption:0,closing:null});
+    const g=byDate.get(d),type=tType(t),v=tVal(t);
+    if(type.includes("PURCHASE")||type.includes("RECEIVED")||type==="RECEV") g.received+=v;
+    if(type.includes("CONSUMPTION")) g.consumption+=v;
+    if(type.includes("CL. STOCK")||type.includes("CLOSING STOCK")){
+      const raw=num(t.for_day??t.value??t.quantity??t.qty);
+      if(raw!==null)g.closing=Math.abs(raw);
+    }
+  });
+  return [...byDate.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+}
+function materialHistoryHtml(material){
+  const unit=materialUnit(material,getMaterial(material)?.unit||"MT");
+  const hist=materialDateHistory(material);
+  if(!hist.length)return `<div class="detail-section"><h3>📅 Date-wise History</h3><div class="empty">No dated material history available.</div></div>`;
+  const rows=hist.map(([d,g])=>`<div class="history-row">
+    <strong>${esc(d)}</strong>
+    <span><small>Received</small><b>${fmt(g.received)} ${esc(unit)}</b></span>
+    <span><small>Consumption</small><b>${fmt(g.consumption)} ${esc(unit)}</b></span>
+    <span><small>Closing</small><b>${g.closing===null?"--":fmt(g.closing)+" "+esc(unit)}</b></span>
+  </div>`).join("");
+  return `<div class="detail-section"><h3>📅 Date-wise History</h3><div class="history-head"><span>Date</span><span>Received</span><span>Consumption</span><span>Closing</span></div>${rows}</div>`;
+}
 function openMaterialDetails(material){
   const x=getMaterial(material),rows=transactions(material),closing=num(x?.closing)||0,avg=avgConsumption(material),s=stockStatus(closing,avg),reorder=avg*DEFAULT_SAFETY_DAYS;
   const groups=["OPENING STOCK","PURCHASE","TRANSFER FROM SOYA DIVISION","GAIN","SALE","SHORTAGE","CONSUMPTION","CL. STOCK"];
   const unit=materialUnit(material,x?.unit||"MT");
   const rec=materialReconciliation(material);
   let html=`<div class="detail-section"><h3>${esc(material)}</h3>${detail("Current Stock",fmt(closing)+" "+unit)}${detail("Average Daily Consumption",avg?fmt(avg)+" "+unit+"/day":"Insufficient history")}${detail("Safety Days",DEFAULT_SAFETY_DAYS+" days")}${detail("Stock Coverage",s.cover!==null?fmt(s.cover)+" days":"--")}${detail("Calculated Reorder Level",fmt(reorder)+" "+unit)}${detail("Status",s.status)}</div>`;
+  html+=materialHistoryHtml(material);
   if(rec.status==="MATCH"||rec.status==="MISMATCH"){
     const cls=rec.status==="MATCH"?"reconcile-ok":"reconcile-bad";
     html+=`<div class="detail-section ${cls}"><h3>🔎 Stock Reconciliation • ${esc(rec.date||"Latest")}</h3>${detail("Opening",fmt(rec.opening)+" "+unit)}${detail("Additions",fmt(rec.add)+" "+unit)}${detail("Other deductions",fmt(rec.otherOut)+" "+unit)}${detail("Actual Closing",fmt(rec.closing)+" "+unit)}${detail("Calculated Consumption",fmt(rec.calculated)+" "+unit)}${detail("Recorded Consumption",fmt(rec.recorded)+" "+unit)}${detail("Difference",fmt(rec.diff)+" "+unit)}${detail("Result",rec.status==="MATCH"?"✓ MATCH":"⚠ CHECK — possible missing/wrong transaction")}</div>`;
@@ -794,6 +824,7 @@ function openMaterialDetails(material){
   }
   showModal(material,html);
 }
+
 function openStockDetails(){showModal("Raw Material Stock",getMaterials().map(m=>{const x=getMaterial(m);return `<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(m)}')"><div class="row-name">${esc(m)}</div><div class="row-right"><strong>${fmtMaterial(x?.closing,m,x?.unit||"MT")}</strong><small>Details →</small></div></div>`}).join("")||"<div class='empty'>No stock data</div>")}
 function openRawCategory(tab){const rows=getMaterials().map(m=>({m,v:rawTotal(m,tab)})).sort((a,b)=>(b.v>0)-(a.v>0)||b.v-a.v);showModal(tab==="PURCHASE"?"Raw Material Received":("Raw Material "+tab),rows.map(({m,v})=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(m)}')"><div class="row-name">${esc(m)}</div><div class="row-right"><strong>${fmtMaterial(v,m,"MT")}</strong><small>Tap for complete details</small></div></div>`).join("")||"<div class='empty'>No data</div>")}
 function openProductionDetails(){const rows=selectedProduction().slice().sort((a,b)=>{const av=num(a.actual_output)||0,bv=num(b.actual_output)||0;return (bv>0)-(av>0)||bv-av});showModal("Production",rows.map(r=>`<div class="feed-row" onclick="closeModal();openProductDetails('${jsq(r.product)}')"><div class="row-name">${esc(r.product)}</div><div class="row-right"><strong>${fmtBags(r.actual_output)}</strong><small>Output ${fmt(r.output_percentage)}%</small></div></div>`).join("")||"<div class='empty'>No production data</div>")}
@@ -848,8 +879,30 @@ function openProductDetails(product){
   showModal(product,html);
 }
 function openPPBagDetails(){showModal("PP Bags",selectedBags().map(r=>`<div class="detail-section"><h3>${esc(r.product||"PP Bags")}</h3>${detail("Opening",fmt(r.opening))}${detail("Received",fmt(r.received))}${detail("Issue",fmt(r.issue))}${detail("Damage",fmt(r.damage))}${detail("Closing",fmt(r.closing))}</div>`).join("")||"<div class='empty'>No PP Bag data</div>")}
+function ppBagHistoryHtml(product){
+  const target=normalize(product);
+  const source=(DATA.bagsHistory&&DATA.bagsHistory.length)?DATA.bagsHistory:DATA.bags;
+  const rows=(source||[]).filter(r=>normalize(r.product||"PP Bags")===target);
+  const map=new Map();
+  rows.forEach(r=>{
+    const d=dateOnly(r.report_date||r.Report_Date); if(!d)return;
+    map.set(d,{received:num(r.received)||0,issue:num(r.issue)||0,damage:num(r.damage)||0,closing:num(r.closing)});
+  });
+  const hist=[...map.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+  if(!hist.length)return `<div class="detail-section"><h3>📅 Date-wise History</h3><div class="empty">No dated PP Bag history available.</div></div>`;
+  const rowsHtml=hist.map(([d,g])=>`<div class="history-row">
+    <strong>${esc(d)}</strong>
+    <span><small>Received</small><b>${fmt(g.received)}</b></span>
+    <span><small>Issue</small><b>${fmt(g.issue)}</b></span>
+    <span><small>Damage</small><b>${fmt(g.damage)}</b></span>
+    <span><small>Closing</small><b>${Number.isFinite(g.closing) ? fmt(g.closing) : "--"}</b></span>
+  </div>`).join("");
+  return `<div class="detail-section"><h3>📅 Date-wise History</h3><div class="history-head history-five"><span>Date</span><span>Received</span><span>Issue</span><span>Damage</span><span>Closing</span></div>${rowsHtml}</div>`;
+}
 function openBagProduct(product){
-  const r=selectedBags().find(x=>normalize(x.product||"PP Bags")===normalize(product));
+  const source=(DATA.bagsHistory&&DATA.bagsHistory.length)?DATA.bagsHistory:DATA.bags;
+  const allRows=(source||[]).filter(x=>normalize(x.product||"PP Bags")===normalize(product));
+  const r=selectedBags().find(x=>normalize(x.product||"PP Bags")===normalize(product))||allRows[allRows.length-1];
   if(!r)return;
   const rec=ppBagReconciliation(product);
   let html="";
@@ -860,8 +913,10 @@ function openBagProduct(product){
     html+=`<div class="detail-section reconcile-warn"><h3>🔎 PP Bags Reconciliation</h3><div class="empty">${esc(rec.message||"Insufficient data for reconciliation.")}</div></div>`;
   }
   html+=`<div class="detail-section"><h3>${esc(product)}</h3>${detail("Opening",fmt(r.opening))}${detail("Received",fmt(r.received))}${detail("Issue",fmt(r.issue))}${detail("Damage",fmt(r.damage))}${detail("Closing",fmt(r.closing))}</div>`;
+  html+=ppBagHistoryHtml(product);
   showModal(product,html);
 }
+
 function openFeedTotals(type){
   const label={production_day:"Day Production",production_month:"Month Production",dispatch_day:"Day Dispatch",dispatch_month:"Month Dispatch"}[type]||"Feed Unit";
   const key={production_day:"Production_Day_MT",production_month:"Production_Month_MT",dispatch_day:"Dispatch_Day_MT",dispatch_month:"Dispatch_Month_MT"}[type];
@@ -869,10 +924,35 @@ function openFeedTotals(type){
   const rows=latestFeedRows().slice().sort((a,b)=>{const av=num(feedField(a,key))||0,bv=num(feedField(b,key))||0;return (bv>0)-(av>0)||bv-av});
   showModal(label,`<div class="detail-section">${detail("Total",fmtMT(total))}</div>`+rows.map(r=>{const p=r.Product||r.product||"--";const v=feedField(r,key);return `<div class="feed-row" onclick="closeModal();openFeedProductDetails('${jsq(p)}')"><div class="row-name">${esc(p)}</div><div class="row-right"><strong>${fmtFeed(v,p)}</strong><small>Product details →</small></div></div>`}).join(""));
 }
+function feedProductHistoryHtml(product){
+  const target=normalize(product);
+  const rows=(DATA.feedUnitData||[]).filter(r=>normalize(r.Product||r.product)===target);
+  const map=new Map();
+  rows.forEach(r=>{
+    const d=dateOnly(r.Report_Date||r.report_date); if(!d)return;
+    const key=d;
+    const g=map.get(key)||{production:0,dispatch:0,closing:null};
+    g.production+=num(r.Production_Day_MT??r.production_day_mt??r.Production_Day??r.production_day??r.Production??r.production)||0;
+    g.dispatch+=num(r.Dispatch_Day_MT??r.dispatch_day_mt??r.Dispatch_Day??r.dispatch_day??r.Dispatch??r.dispatch)||0;
+    const c=num(r.Closing_Day_MT??r.closing_day_mt??r.Closing_Day??r.closing_day??r.Closing??r.closing);
+    if(c!==null)g.closing=c;
+    map.set(key,g);
+  });
+  const hist=[...map.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+  if(!hist.length)return `<div class="detail-section"><h3>📅 Date-wise History</h3><div class="empty">No dated Feed Unit history available.</div></div>`;
+  const rowsHtml=hist.map(([d,g])=>`<div class="history-row">
+    <strong>${esc(d)}</strong>
+    <span><small>Production</small><b>${fmtFeed(g.production,product)}</b></span>
+    <span><small>Dispatch</small><b>${fmtFeed(g.dispatch,product)}</b></span>
+    <span><small>Closing</small><b>${g.closing===null?"--":fmtFeed(g.closing,product)}</b></span>
+  </div>`).join("");
+  return `<div class="detail-section"><h3>📅 Date-wise History</h3><div class="history-head"><span>Date</span><span>Production</span><span>Dispatch</span><span>Closing</span></div>${rowsHtml}</div>`;
+}
 function openFeedProductDetails(product){
+  const allRows=(DATA.feedUnitData||[]).filter(r=>normalize(r.Product||r.product)===normalize(product));
   const rows=selectedFeedRows().filter(r=>normalize(r.Product||r.product)===normalize(product));
-  if(!rows.length){showModal(product,"<div class='empty'>No Feed Unit product data available for this date.</div>");return}
-  const r=rows[rows.length-1];
+  const r=(rows.length?rows:allRows).slice(-1)[0];
+  if(!r){showModal(product,"<div class='empty'>No Feed Unit product data available.</div>");return}
   const rec=productionReconciliation(product);
   let html="";
   if(rec.status==="MATCH"||rec.status==="MISMATCH"){
@@ -882,7 +962,7 @@ function openFeedProductDetails(product){
     html+=`<div class="detail-section reconcile-warn"><h3>🔎 Production / Dispatch Reconciliation</h3><div class="empty">${esc(rec.message||"Insufficient data for reconciliation.")}</div></div>`;
   }
   html+=`<div class="detail-section"><h3>${esc(product)}</h3>${detail("Opening Day",fmtFeed(r.Opening_Day_MT??r.opening_day_mt??r.Opening_Day??r.opening_day??r.Opening??r.opening,product))}${detail("Production Day",fmtFeed(r.Production_Day_MT??r.production_day_mt??r.Production_Day??r.production_day??r.Production??r.production,product))}${detail("Dispatch Day",fmtFeed(r.Dispatch_Day_MT??r.dispatch_day_mt??r.Dispatch_Day??r.dispatch_day??r.Dispatch??r.dispatch,product))}${isPremixProduct(product)?detail("Received from Bommakal",fmtFeed(r.Transfer_Day_MT??r.transfer_day_mt??r.Transfer_Day??r.transfer_day??r.Transfer??r.transfer,product)):""}${detail("Transfer Day",fmtFeed(r.Transfer_Day_MT??r.transfer_day_mt??r.Transfer_Day??r.transfer_day??r.Transfer??r.transfer,product))}${detail("Closing Day",fmtFeed(r.Closing_Day_MT??r.closing_day_mt??r.Closing_Day??r.closing_day??r.Closing??r.closing,product))}${detail("Production Month",fmtFeed(r.Production_Month_MT??r.production_month_mt??r.Production_Month??r.production_month,product))}${detail("Dispatch Month",fmtFeed(r.Dispatch_Month_MT??r.dispatch_month_mt??r.Dispatch_Month??r.dispatch_month,product))}</div>`;
-  if(rows.length>1){html+=`<div class="detail-section"><h3>Available records</h3>`+rows.map(z=>`<div class="transaction">${detail("Date",z.Report_Date||z.report_date||"--")}${detail("Opening",fmtFeed(z.Opening_Day_MT??z.opening_day_mt??z.Opening_Day??z.opening_day??z.Opening??z.opening,product))}${detail("Production",fmtFeed(z.Production_Day_MT??z.production_day_mt,product))}${detail("Dispatch",fmtFeed(z.Dispatch_Day_MT??z.dispatch_day_mt,product))}${detail("Closing",fmtFeed(z.Closing_Day_MT??z.closing_day_mt,product))}</div>`).join("")+"</div>"}
+  html+=feedProductHistoryHtml(product);
   showModal(product,html);
 }
 
@@ -1088,10 +1168,21 @@ function renderPPBags(){
 }
 function renderStock(){
   const list=document.getElementById("stockList"),premixList=document.getElementById("premixStockList"),mats=getMaterials();
-  const renderRows=(rows)=>rows.slice().sort((a,b)=>{const av=num(getMaterial(a)?.closing)||0,bv=num(getMaterial(b)?.closing)||0;return (bv>0)-(av>0)||bv-av;}).map(m=>{
+  const renderRows=(rows)=>rows.slice().sort((a,b)=>{
+    const av=num(getMaterial(a)?.closing)||0,bv=num(getMaterial(b)?.closing)||0;
+    return (bv>0)-(av>0)||bv-av;
+  }).map(m=>{
     const x=getMaterial(m),closing=num(x?.closing)||0,avg=avgConsumption(m),st=stockStatus(closing,avg),unit=x?.unit||"MT";
     const dot=st.status==="REORDER"?"🔴":st.status==="WATCH"?"🟡":st.status==="OK"?"🟢":"⚪";
-    return `<div class="stock-row reorder-card" onclick="openMaterialDetails('${jsq(m)}')"><div class="reorder-card-top"><strong class="reorder-material">${esc(m)}</strong><span class="status-dot ${st.cls}" title="${esc(st.status)}" aria-label="${esc(st.status)}"></span></div><div class="reorder-card-metrics"><span><b>Stock</b><strong>${fmt(closing)} ${esc(unit)}</strong></span><span><b>Avg/day</b><strong>${avg?fmt(avg):"--"} ${esc(unit)}</strong></span><span><b>Cover</b><strong>${st.cover!==null?fmt(st.cover)+" d":"--"}</strong></span></div></div>`;
+    return `<div class="stock-row reorder-card" onclick="openMaterialDetails('${jsq(m)}')">
+      <div class="reorder-material-wrap">
+        <strong class="reorder-material">${esc(m)}</strong>
+        <small class="avg-under-material">Avg/day ${avg?fmt(avg):"--"} ${esc(unit)}</small>
+      </div>
+      <span class="reorder-stock-cell"><strong>${fmt(closing)} ${esc(unit)}</strong></span>
+      <span class="reorder-cover-cell"><strong>${st.cover!==null?fmt(st.cover)+" d":"--"}</strong></span>
+      <span class="reorder-status-cell"><span class="status-dot ${st.cls}" title="${esc(st.status)}" aria-label="${esc(st.status)}">${dot}</span></span>
+    </div>`;
   }).join("")||"<div class='empty'>No stock data for this date</div>";
   const rawMats=mats.filter(m=>!isPremixMaterial(m));
   const premixMats=mats.filter(m=>isPremixMaterial(m));
