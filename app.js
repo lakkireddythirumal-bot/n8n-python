@@ -1773,25 +1773,21 @@ function reportRange(){
   if(from>to){const x=from;from=to;to=x;}
   return {from,to,all};
 }
+let reportActiveView='';
 function initReportCenter(){
-  refreshReportHistorySelectors();
   const all=reportAllDates();
   const f=document.getElementById('reportFromDate'),t=document.getElementById('reportToDate');
   if(all.length){
     if(f&&!f.value)f.value=all[Math.max(0,all.length-7)];
     if(t&&!t.value)t.value=all[all.length-1];
   }
-  f?.addEventListener('change',refreshReportPreview);
-  t?.addEventListener('change',refreshReportPreview);
-  document.getElementById('reportHistoryMaterial')?.addEventListener('change',refreshReportPreview);
-  document.getElementById('reportHistoryFeedProduct')?.addEventListener('change',refreshReportPreview);
-  document.getElementById('reportHistoryBagProduct')?.addEventListener('change',refreshReportPreview);
-  refreshReportPreview();
+  f?.addEventListener('change',()=>{if(reportActiveView)refreshReportPreview()});
+  t?.addEventListener('change',()=>{if(reportActiveView)refreshReportPreview()});
 }
 function resetReportDates(){
   const all=reportAllDates();const f=document.getElementById('reportFromDate'),t=document.getElementById('reportToDate');
   if(f)f.value=all[Math.max(0,all.length-7)]||'';if(t)t.value=all[all.length-1]||'';
-  refreshReportPreview();
+  if(reportActiveView)refreshReportPreview();
   showToast('Report range reset');
 }
 function reportInRange(d,from,to){return !!d&&(!from||d>=from)&&(!to||d<=to)}
@@ -1997,27 +1993,59 @@ function showWhatsAppCopyModal(text){
 async function copyVisibleWhatsApp(){const ta=document.getElementById('reportWhatsAppBox');if(!ta)return;const ok=await copyTextRobust(ta.value);if(ok)showToast('WhatsApp message copied');else{ta.focus();ta.select();ta.setSelectionRange(0,ta.value.length);showToast('Tap and hold the message to copy');}}
 async function copyHistoryWhatsApp(kind){const {from,to}=reportRange();if(!from||!to){showToast('No report dates available');return}const text=historyWhatsAppText(kind,from,to);if(!text){showToast('No history for selected range');return}const ok=await copyTextRobust(text);showToast(ok?'WhatsApp message copied':'Tap Copy Message in the message window');showWhatsAppCopyModal(text)}
 
+function openReportView(kind){
+  reportActiveView=kind;
+  const panel=document.getElementById('reportViewPanel');
+  if(!panel)return;
+  panel.hidden=false;
+  const titles={
+    complete:['📕 Complete Dashboard Report','Management summary for the selected date range'],
+    material:['📦 Raw Material — Material-wise','Select a material to view its history'],
+    feed:['🌾 Feed Unit — Product-wise','Select a product to view its history'],
+    bags:['🛍 PP Bags — Product-wise','Select a PP bag product to view its history'],
+    production:['🏭 Production — Product-wise','Production records for the selected date range'],
+    premix:['🧪 Premix','Premix transfer records for the selected date range'],
+    mix:['📊 Monthly Mix & Contribution','Monthly mix and contribution for the selected range'],
+    movements:['📋 RM Movements','Raw material stock movement records'],
+    spares:['🔧 Spare Parts','Current spare parts stock and reorder data'],
+    health:['⚠️ Data Health','Reorder, reconciliation and data-quality checks']
+  };
+  const title=document.getElementById('reportViewTitle'),sub=document.getElementById('reportViewSubtitle'),controls=document.getElementById('reportViewControls');
+  if(title)title.textContent=titles[kind]?.[0]||'Report View';
+  if(sub)sub.textContent=titles[kind]?.[1]||'';
+  if(controls){
+    if(kind==='material') controls.innerHTML='<label>Material<select id="reportHistoryMaterial" onchange="refreshReportPreview()"></select></label>';
+    else if(kind==='feed') controls.innerHTML='<label>Product<select id="reportHistoryFeedProduct" onchange="refreshReportPreview()"></select></label>';
+    else if(kind==='bags') controls.innerHTML='<label>PP Bag Product<select id="reportHistoryBagProduct" onchange="refreshReportPreview()"></select></label>';
+    else controls.innerHTML='';
+  }
+  if(['material','feed','bags'].includes(kind))refreshReportHistorySelectors();
+  refreshReportPreview();
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeReportView(){
+  reportActiveView='';
+  const panel=document.getElementById('reportViewPanel');
+  if(panel)panel.hidden=true;
+}
 function refreshReportPreview(){
-  const table=document.getElementById('reportPreviewTable');
-  const meta=document.getElementById('reportPreviewMeta');
-  const select=document.getElementById('reportPreviewSection');
-  if(!table||!select)return;
+  const table=document.getElementById('reportPreviewTable'),meta=document.getElementById('reportPreviewMeta');
+  if(!table||!reportActiveView)return;
   const {from,to}=reportRange();
-  if(!from||!to){
-    table.innerHTML='<div class="empty">No report dates available.</div>';
-    if(meta)meta.textContent='';
-    return;
+  if(!from||!to){table.innerHTML='<div class="empty">No report dates available.</div>';if(meta)meta.textContent='';return;}
+  let sec;
+  if(reportActiveView==='complete'){
+    const summary=reportSummary(from,to);
+    sec={title:'Management Summary',headers:['Metric','Value','Unit / Context'],rows:summary};
+  }else if(['material','feed','bags'].includes(reportActiveView)){
+    sec=reportHistoryData(reportActiveView,from,to);
+  }else{
+    sec=reportSectionData(reportActiveView,from,to);
   }
-  const section=select.value||'raw';
-  const sec=reportSectionData(section,from,to);
   const rows=sec.rows||[];
-  if(meta)meta.innerHTML=`<span>${esc(from)} → ${esc(to)}</span><b>${rows.length.toLocaleString('en-IN')} records</b>`;
-  if(!rows.length){
-    table.innerHTML='<div class="history-empty">No data available for the selected date range.</div>';
-    return;
-  }
-  const maxRows=500;
-  const visible=rows.slice(0,maxRows);
+  if(meta)meta.innerHTML=`<span>${esc(from)} → ${esc(to)}${sec.selected?' • '+esc(sec.selected):''}</span><b>${rows.length.toLocaleString('en-IN')} records</b>`;
+  if(!rows.length){table.innerHTML='<div class="history-empty">No data available for the selected date range.</div>';return;}
+  const maxRows=500,visible=rows.slice(0,maxRows);
   table.innerHTML=`<table><thead><tr>${sec.headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${visible.map(r=>`<tr>${r.map(v=>`<td>${esc(reportDisplayCell(v))}</td>`).join('')}</tr>`).join('')}</tbody></table>${rows.length>maxRows?`<div class="report-preview-more">Showing first ${maxRows.toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} records. Download Excel/PDF for the complete report.</div>`:''}`;
 }
 
