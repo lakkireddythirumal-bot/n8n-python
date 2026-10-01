@@ -37,30 +37,30 @@
   </div>
 
   <!-- MANAGEMENT QUICK VIEW -->
-  <div class="card">
+  <div class="card page-section" id="managementQuickView">
     <div class="card-title"><h2>⚡ Management Quick View</h2><span id="dateQuickView">Data: --</span></div>
     <div class="quick-grid manager-quick-grid">
-      <div class="quick quick-kpi" onclick="openFeedTotals('production_day')"><p>Day Production</p><strong id="qProdDay">-- MT</strong><div class="spark" id="sparkProd"></div></div>
-      <div class="quick" onclick="openFeedTotals('production_month')"><p>Month Production</p><strong id="qProdMonth">-- MT</strong></div>
-      <div class="quick quick-kpi" onclick="openFeedTotals('dispatch_day')"><p>Day Dispatch</p><strong id="qDispDay">-- MT</strong><div class="spark" id="sparkDisp"></div></div>
-      <div class="quick" onclick="openFeedTotals('dispatch_month')"><p>Month Dispatch</p><strong id="qDispMonth">-- MT</strong></div>
-      <div class="quick" onclick="openRawCategory('PURCHASE')"><p>RM Received</p><strong id="qReceived">--</strong></div>
-      <div class="quick" onclick="openRawCategory('CONSUMPTION')"><p>RM Consumption</p><strong id="qConsumption">--</strong></div>
-      <div class="quick" onclick="openStockDetails()"><p>RM Closing</p><strong id="qClosing">--</strong></div>
-      <div class="quick" onclick="openFeedClosingDetails()"><p>Feed Closing</p><strong id="qFeedClosing">-- MT</strong><small id="qFeedClosingBagsMini" style="display:block;margin-top:3px;color:#64748b;font-weight:600">-- Bags</small></div>
-      <div class="quick" onclick="openStockForecast()"><p>RM Reorder</p><strong id="mergedReorder">--</strong></div>
+      <div class="quick quick-kpi" onclick="showPage('operations')"><p>Day Production</p><strong id="qProdDay">-- MT</strong><div class="spark" id="sparkProd"></div></div>
+      <div class="quick" onclick="showPage('operations')"><p>Month Production</p><strong id="qProdMonth">-- MT</strong></div>
+      <div class="quick quick-kpi" onclick="showPage('operations')"><p>Day Dispatch</p><strong id="qDispDay">-- MT</strong><div class="spark" id="sparkDisp"></div></div>
+      <div class="quick" onclick="showPage('operations')"><p>Month Dispatch</p><strong id="qDispMonth">-- MT</strong></div>
+      <div class="quick" onclick="showPage('inventory')"><p>RM Received</p><strong id="qReceived">--</strong></div>
+      <div class="quick" onclick="showPage('inventory')"><p>RM Consumption</p><strong id="qConsumption">--</strong></div>
+      <div class="quick" onclick="showPage('inventory')"><p>RM Closing</p><strong id="qClosing">--</strong></div>
+      <div class="quick" onclick="showPage('operations')"><p>Feed Closing</p><strong id="qFeedClosing">-- MT</strong><small id="qFeedClosingBagsMini" style="display:block;margin-top:3px;color:#64748b;font-weight:600">-- Bags</small></div>
+      <div class="quick" onclick="showPage('inventory')"><p>RM Reorder</p><strong id="mergedReorder">--</strong></div>
     </div>
   </div>
 
   <!-- BOMMAKAL PREMIX TRANSFERS -->
-  <div class="card premix-card" id="premixTransferCard">
+  <div class="card premix-card page-section" id="premixTransferCard">
     <div class="card-title"><h2>🧪 Premixes</h2><span id="datePremix">Data: --</span></div>
     <div id="premixTransferList"><div class="empty">Loading...</div></div>
   </div>
 
   <div class="desktop-grid">
     <!-- RAW MATERIAL REORDER -->
-    <div class="card">
+    <div class="card page-section" id="rawReorderSection">
       <div class="card-title"><h2>📦 Raw Material Reorder</h2><span id="dateRawReorder">Data: --</span></div>
       <div class="reorder-single-wrap">
         <div class="reorder-section-title">🌾 Raw Materials</div>
@@ -76,7 +76,7 @@
     </div>
 
     <!-- PRODUCTION -->
-    <div class="card">
+    <div class="card page-section" id="productionSection">
       <div class="card-title"><h2>🏭 Production</h2><span id="dateProduction">Data: --</span></div>
       <div class="production-total" id="productionTotalMain">-- Bags</div>
       <div class="production-label">Actual Production</div>
@@ -86,13 +86,13 @@
   </div>
 
   <!-- FEED UNIT -->
-  <div class="card">
+  <div class="card page-section" id="feedUnitSection">
     <div class="card-title"><h2>🌾 Feed Unit</h2><span id="dateFeedUnit">Data: --</span></div>
     <div id="feedUnitList"><div class="empty">Loading...</div></div>
   </div>
 
   <!-- COLLAPSED HISTORY CARDS -->
-  <div class="history-cards-wrap">
+  <div class="history-cards-wrap page-section" id="historySection">
     <div class="history-card" id="rmHistoryCard">
       <button class="history-card-head" type="button" onclick="toggleHistoryCard('rmHistoryCard','rmHistoryBody')">
         <span><strong>📦 Raw Material History</strong><small>Material → Date</small></span><b id="rmHistoryChevron">＋</b>
@@ -116,7 +116,7 @@
   </div>
 
   <!-- RAW MATERIAL MOVEMENTS -->
-  <div class="card">
+  <div class="card page-section" id="rawMovementsSection">
     <div class="card-title"><h2>📋 Raw Material Movements</h2><span id="dateRawMovements">Data: --</span></div>
     <div class="section-tabs">
       <button class="active" onclick="setRawTab(this,'STOCK')">Stock</button>
@@ -131,14 +131,14 @@
   </div>
 
     <!-- PP BAGS -->
-    <div class="card">
+    <div class="card page-section" id="ppBagsSection">
       <div class="card-title"><h2>🛍 PP Bags</h2><span id="datePPBags">Data: --</span></div>
       <div class="pp-grid" id="bagGrid"><div class="empty">Loading...</div></div>
     </div>
 
 
   <!-- MONTHLY MIX & CONTRIBUTION -->
-  <div class="card monthly-mix-card" id="monthlyMixSection">
+  <div class="card monthly-mix-card page-section" id="monthlyMixSection">
     <div class="card-title">
       <div><h2>📊 Monthly Mix &amp; Contribution</h2><span id="dateMonthlyMix">Month: --</span></div>
       <select id="mixMonthSelect" class="mix-month-select" onchange="setMixMonth(this.value)"></select>
@@ -166,7 +166,7 @@
   </div>
 
   <!-- SPARE PARTS -->
-  <div class="card spare-parts-card" id="sparePartsSection">
+  <div class="card spare-parts-card page-section" id="sparePartsSection">
     <div class="card-title"><div><h2>🔧 Spare Parts</h2><span id="dateSpareParts">Data: --</span></div><button class="spare-refresh-btn" onclick="loadSpareParts(true)">↻ Refresh</button></div>
     <div class="section-tabs spare-tabs">
       <button class="active" onclick="setSpareTab(this,'SPARE_STOCK')">Stock</button>
@@ -179,7 +179,7 @@
 
 
   <!-- REPORT CENTER -->
-  <div class="card report-center-card" id="reportCenterSection">
+  <div class="card report-center-card page-section" id="reportCenterSection">
     <div class="card-title">
       <div><h2>📊 Report Center</h2><span>Complete plant reports • PDF • Excel • WhatsApp Copy</span></div>
     </div>
@@ -221,7 +221,7 @@
   </div>
 
   <!-- TRENDS -->
-  <div class="card" id="trendsSection">
+  <div class="card page-section" id="trendsSection">
     <div class="card-title"><h2>📊 Trends</h2><span id="dateTrends">Data through: --</span></div>
     <div class="trend-wrapper" id="trendWrapper">
       <div class="trend-card"><div class="trend-header"><div><h3>📦 Raw Material Consumption</h3><small id="trendDateMaterial">Data: --</small></div><select id="materialSelect" onchange="drawMaterialChart(this.value)"></select></div><canvas id="materialChart"></canvas></div>
@@ -237,12 +237,11 @@
   </div>
 
   <div class="bottom-nav">
-    <div class="nav-item active" onclick="goHome()"><div>⌂</div>Home</div>
-    <div class="nav-item" onclick="openStockDetails()"><div>📦</div>Stock</div>
-    <div class="nav-item" onclick="openProductionDetails()"><div>🏭</div>Production</div>
-    <div class="nav-item" onclick="openPPBagDetails()"><div>🛍</div>PP Bags</div>
-    <div class="nav-item" onclick="goSpareParts()"><div>🔧</div>Spares</div>
-    <div class="nav-item" onclick="goTrend()"><div>📊</div>Reports</div>
+    <button class="nav-item active" data-page="home" onclick="showPage('home')"><div>⌂</div>Home</button>
+    <button class="nav-item" data-page="inventory" onclick="showPage('inventory')"><div>📦</div>Inventory</button>
+    <button class="nav-item" data-page="operations" onclick="showPage('operations')"><div>🏭</div>Operations</button>
+    <button class="nav-item" data-page="analytics" onclick="showPage('analytics')"><div>📊</div>Analytics</button>
+    <button class="nav-item" data-page="reports" onclick="showPage('reports')"><div>📋</div>Reports</button>
   </div>
 </div>
 

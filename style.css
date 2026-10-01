@@ -983,3 +983,23 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
   .monthly-mix-tabs{gap:6px;margin:8px 0 7px}
   .monthly-mix-tab{padding:9px 5px;font-size:10.5px}
 }
+
+/* =====================================================
+   PAGE NAVIGATION — preserves existing dashboard styles
+===================================================== */
+.page-section.page-hidden{display:none!important}
+body.page-mode .container{padding-bottom:92px}
+.bottom-nav{z-index:50}
+.bottom-nav .nav-item{border:0;background:transparent;font:inherit;cursor:pointer;min-width:0}
+.page-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 14px}
+.page-heading h2{margin:0;font-size:20px}
+.page-heading small{color:#64748b;font-weight:600}
+.page-intro{margin:-4px 0 14px;color:#64748b;font-size:13px}
+.dashboard-attention{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.attention-tile{border:1px solid #e2e8f0;border-radius:14px;background:#fff;padding:13px;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.attention-tile:active{transform:scale(.98)}
+.attention-tile strong{display:block;font-size:22px;line-height:1.1;margin-top:4px}
+.attention-tile span{font-size:12px;color:#64748b;font-weight:700}
+.attention-tile.red{border-color:#fecaca;background:#fff7f7}.attention-tile.yellow{border-color:#fde68a;background:#fffbeb}.attention-tile.green{border-color:#bbf7d0;background:#f0fdf4}
+@media(max-width:620px){.dashboard-attention{grid-template-columns:repeat(3,1fr);gap:7px}.attention-tile{padding:10px}.attention-tile strong{font-size:19px}.attention-tile span{font-size:10px}}
+.manager-quick-grid .quick{cursor:pointer;transition:transform .15s,box-shadow .15s}.manager-quick-grid .quick:active{transform:scale(.985)}

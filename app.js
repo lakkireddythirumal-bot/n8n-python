@@ -2146,3 +2146,32 @@ function renderProduction(){
   }).join("")||"<div class='empty'>No production data for this date</div>";
 }
 
+
+/* =====================================================
+   PAGE NAVIGATION — UI only; existing data/functions preserved
+===================================================== */
+const PAGE_SECTIONS={
+  home:['managementQuickView','premixTransferCard'],
+  inventory:['rawReorderSection','rawMovementsSection','ppBagsSection','sparePartsSection','historySection'],
+  operations:['productionSection','feedUnitSection','monthlyMixSection','historySection'],
+  analytics:['trendsSection'],
+  reports:['reportCenterSection']
+};
+function pageSectionIds(){return Object.values(PAGE_SECTIONS).flat();}
+function showPage(page,scroll=true){
+  page=PAGE_SECTIONS[page]?page:'home';
+  document.body.classList.add('page-mode');
+  const ids=pageSectionIds();
+  ids.forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('page-hidden',!PAGE_SECTIONS[page].includes(id));});
+  document.querySelectorAll('.bottom-nav .nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));
+  try{history.replaceState(null,'','#'+page)}catch(e){}
+  if(scroll)window.scrollTo({top:0,behavior:'smooth'});
+  if(page==='inventory')loadSpareParts(false);
+}
+function initPageNavigation(){
+  const hash=(location.hash||'').replace('#','');
+  showPage(PAGE_SECTIONS[hash]?hash:'home',false);
+}
+window.addEventListener('hashchange',()=>{const p=(location.hash||'').replace('#','');showPage(PAGE_SECTIONS[p]?p:'home');});
+
+setTimeout(initPageNavigation,0);
