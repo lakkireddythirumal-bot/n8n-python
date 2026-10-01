@@ -114,6 +114,30 @@
     <div id="feedUnitList"><div class="empty">Loading...</div></div>
   </div>
 
+  <!-- COLLAPSED HISTORY CARDS -->
+  <div class="history-cards-wrap">
+    <div class="history-card" id="rmHistoryCard">
+      <button class="history-card-head" type="button" onclick="toggleHistoryCard('rmHistoryCard','rmHistoryBody')">
+        <span><strong>📦 Raw Material History</strong><small>Material → Date</small></span><b id="rmHistoryChevron">＋</b>
+      </button>
+      <div class="history-card-body" id="rmHistoryBody"></div>
+    </div>
+
+    <div class="history-card" id="feedHistoryCard">
+      <button class="history-card-head" type="button" onclick="toggleHistoryCard('feedHistoryCard','feedHistoryBody')">
+        <span><strong>🌾 Feed Unit History</strong><small>Product → Date</small></span><b id="feedHistoryChevron">＋</b>
+      </button>
+      <div class="history-card-body" id="feedHistoryBody"></div>
+    </div>
+
+    <div class="history-card" id="bagsHistoryCard">
+      <button class="history-card-head" type="button" onclick="toggleHistoryCard('bagsHistoryCard','bagsHistoryBody')">
+        <span><strong>🛍 PP Bags History</strong><small>Product → Date</small></span><b id="bagsHistoryChevron">＋</b>
+      </button>
+      <div class="history-card-body" id="bagsHistoryBody"></div>
+    </div>
+  </div>
+
   <!-- RAW MATERIAL MOVEMENTS -->
   <div class="card">
     <div class="card-title"><h2>📋 Raw Material Movements</h2><span id="dateRawMovements">Data: --</span></div>

@@ -647,6 +647,168 @@ function updateSectionDates(){
   setText("trendDateBags",formatSectionDate(bagDate));
 }
 
+
+/* =====================================================
+   COLLAPSED HISTORY CARDS — MATERIAL / PRODUCT / DATE
+===================================================== */
+function toggleHistoryCard(cardId,bodyId){
+  const card=document.getElementById(cardId), body=document.getElementById(bodyId);
+  if(!card||!body)return;
+  const opening=!card.classList.contains("open");
+  card.classList.toggle("open",opening);
+  const key=cardId.replace("HistoryCard","");
+  const chev=document.getElementById(key+"HistoryChevron");
+  if(chev)chev.textContent=opening?"−":"＋";
+  if(opening){
+    if(key==="rm")renderRMHistoryCard();
+    else if(key==="feed")renderFeedHistoryCard();
+    else if(key==="bags")renderBagsHistoryCard();
+  }
+}
+function historyDateOptions(dates,selected){
+  return dates.slice().sort().reverse().map(d=>`<option value="${esc(d)}" ${d===selected?"selected":""}>${esc(d)}</option>`).join("");
+}
+function historySelectOptions(items,selected){
+  return items.map(x=>`<option value="${esc(x)}" ${normalize(x)===normalize(selected)?"selected":""}>${esc(x)}</option>`).join("");
+}
+function rmHistoryTransactions(material){
+  const target=normalize(material),out=[];
+  (DATA.stock||[]).forEach(x=>{
+    if(normalize(x.material)!==target)return;
+    (Array.isArray(x.transactions)?x.transactions:[]).forEach(t=>out.push(t));
+  });
+  if(!out.length){
+    (DATA.stockHistory||[]).forEach(t=>{
+      if(normalize(t.material)===target)out.push(t);
+    });
+  }
+  return out;
+}
+function rmHistoryMaterials(){
+  const set=new Map();
+  (DATA.stock||[]).forEach(x=>{const m=clean(x.material);if(m)set.set(normalize(m),m)});
+  (DATA.stockHistory||[]).forEach(x=>{const m=clean(x.material);if(m)set.set(normalize(m),m)});
+  return [...set.values()].sort((a,b)=>a.localeCompare(b));
+}
+function rmHistoryDates(material){
+  return [...new Set(rmHistoryTransactions(material).map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort().reverse();
+}
+function rmHistoryValue(rows,kind){
+  return rows.filter(t=>{
+    const type=tType(t);
+    if(kind==="received")return type==="PURCHASE";
+    if(kind==="consumption")return type.includes("CONSUMPTION");
+    if(kind==="transfer")return type.includes("TRANSFER");
+    return type==="CL. STOCK";
+  }).reduce((sum,t)=>sum+tVal(t),0);
+}
+function rmHistoryClosing(rows){
+  const r=rows.filter(t=>tType(t)==="CL. STOCK").slice(-1)[0];
+  return r? tVal(r):null;
+}
+function renderRMHistoryCard(){
+  const body=document.getElementById("rmHistoryBody");if(!body)return;
+  const mats=rmHistoryMaterials(),material=mats[0]||"";
+  const dates=rmHistoryDates(material),date=dates[0]||"";
+  body.innerHTML=`<div class="history-filter">
+    <label>Material<select id="rmHistoryMaterial" onchange="refreshRMHistoryCard()">${historySelectOptions(mats,material)}</select></label>
+    <label>Date<select id="rmHistoryDate" onchange="refreshRMHistoryTable()">${historyDateOptions(dates,date)}</select></label>
+  </div><div id="rmHistoryTable"></div>`;
+  refreshRMHistoryTable();
+}
+function refreshRMHistoryCard(){
+  const m=document.getElementById("rmHistoryMaterial")?.value||"";
+  const dates=rmHistoryDates(m),d=dates[0]||"";
+  const ds=document.getElementById("rmHistoryDate");
+  if(ds)ds.innerHTML=historyDateOptions(dates,d);
+  refreshRMHistoryTable();
+}
+function refreshRMHistoryTable(){
+  const m=document.getElementById("rmHistoryMaterial")?.value||"",d=document.getElementById("rmHistoryDate")?.value||"",el=document.getElementById("rmHistoryTable");
+  if(!el)return;
+  const rows=rmHistoryTransactions(m).filter(t=>dateOnly(rowDate(t))===d);
+  if(!rows.length){el.innerHTML='<div class="history-empty">No history available for selected date.</div>';return}
+  const unit=materialUnit(m,getMaterial(m)?.unit||"MT");
+  const received=rmHistoryValue(rows,"received"),consumption=rmHistoryValue(rows,"consumption"),transfer=rmHistoryValue(rows,"transfer"),closing=rmHistoryClosing(rows);
+  el.innerHTML=`<div class="history-table"><table><thead><tr><th>Date</th><th>Received</th><th>Consumption</th><th>Transfer</th><th>Closing</th></tr></thead><tbody><tr><td>${esc(d)}</td><td>${fmt(received)} ${esc(unit)}</td><td>${fmt(consumption)} ${esc(unit)}</td><td>${fmt(transfer)} ${esc(unit)}</td><td>${closing===null?"--":fmt(closing)+" "+esc(unit)}</td></tr></tbody></table></div>`;
+}
+function feedHistoryProducts(){
+  const set=new Map();
+  (DATA.feedUnitData||[]).forEach(r=>{const p=clean(r.Product||r.product);if(p)set.set(normalize(p),p)});
+  return [...set.values()].sort((a,b)=>a.localeCompare(b));
+}
+function feedHistoryRows(product){
+  return (DATA.feedUnitData||[]).filter(r=>normalize(r.Product||r.product)===normalize(product));
+}
+function feedHistoryDates(product){
+  return [...new Set(feedHistoryRows(product).map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean))].sort().reverse();
+}
+function feedHistoryValue(r,names){
+  for(const n of names){const v=num(r[n]);if(v!==null)return v}
+  return null;
+}
+function renderFeedHistoryCard(){
+  const body=document.getElementById("feedHistoryBody");if(!body)return;
+  const products=feedHistoryProducts(),product=products[0]||"",dates=feedHistoryDates(product),date=dates[0]||"";
+  body.innerHTML=`<div class="history-filter">
+    <label>Product<select id="feedHistoryProduct" onchange="refreshFeedHistoryCard()">${historySelectOptions(products,product)}</select></label>
+    <label>Date<select id="feedHistoryDate" onchange="refreshFeedHistoryTable()">${historyDateOptions(dates,date)}</select></label>
+  </div><div id="feedHistoryTable"></div>`;
+  refreshFeedHistoryTable();
+}
+function refreshFeedHistoryCard(){
+  const p=document.getElementById("feedHistoryProduct")?.value||"",dates=feedHistoryDates(p),d=dates[0]||"",ds=document.getElementById("feedHistoryDate");
+  if(ds)ds.innerHTML=historyDateOptions(dates,d);
+  refreshFeedHistoryTable();
+}
+function refreshFeedHistoryTable(){
+  const p=document.getElementById("feedHistoryProduct")?.value||"",d=document.getElementById("feedHistoryDate")?.value||"",el=document.getElementById("feedHistoryTable");
+  if(!el)return;
+  const rows=feedHistoryRows(p).filter(r=>dateOnly(r.Report_Date||r.report_date||r.date)===d);
+  if(!rows.length){el.innerHTML='<div class="history-empty">No history available for selected date.</div>';return}
+  const r=rows[rows.length-1];
+  const prod=feedHistoryValue(r,["Production_Day_MT","production_day_mt","Production_Day","production_day","Production","production"]);
+  const disp=feedHistoryValue(r,["Dispatch_Day_MT","dispatch_day_mt","Dispatch_Day","dispatch_day","Dispatch","dispatch"]);
+  const close=feedHistoryValue(r,["Closing_Day_MT","closing_day_mt","Closing_Day","closing_day","Closing","closing"]);
+  el.innerHTML=`<div class="history-table"><table><thead><tr><th>Date</th><th>Production</th><th>Dispatch</th><th>Closing</th></tr></thead><tbody><tr><td>${esc(d)}</td><td>${prod===null?"--":fmtFeed(prod,p)}</td><td>${disp===null?"--":fmtFeed(disp,p)}</td><td>${close===null?"--":fmtFeed(close,p)}</td></tr></tbody></table></div>`;
+}
+function bagsHistoryProducts(){
+  const set=new Map();
+  (DATA.bags||[]).forEach(r=>{const p=clean(r.product||"PP Bags");if(p)set.set(normalize(p),p)});
+  (DATA.bagsHistory||[]).forEach(r=>{const p=clean(r.product||"PP Bags");if(p)set.set(normalize(p),p)});
+  return [...set.values()].sort((a,b)=>a.localeCompare(b));
+}
+function bagsHistoryRows(product){
+  const rows=(DATA.bagsHistory||[]).filter(r=>normalize(r.product||"PP Bags")===normalize(product));
+  if(rows.length)return rows;
+  return (DATA.bags||[]).filter(r=>normalize(r.product||"PP Bags")===normalize(product));
+}
+function bagsHistoryDates(product){
+  return [...new Set(bagsHistoryRows(product).map(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)).filter(Boolean))].sort().reverse();
+}
+function renderBagsHistoryCard(){
+  const body=document.getElementById("bagsHistoryBody");if(!body)return;
+  const products=bagsHistoryProducts(),product=products[0]||"",dates=bagsHistoryDates(product),date=dates[0]||"";
+  body.innerHTML=`<div class="history-filter">
+    <label>Product<select id="bagsHistoryProduct" onchange="refreshBagsHistoryCard()">${historySelectOptions(products,product)}</select></label>
+    <label>Date<select id="bagsHistoryDate" onchange="refreshBagsHistoryTable()">${historyDateOptions(dates,date)}</select></label>
+  </div><div id="bagsHistoryTable"></div>`;
+  refreshBagsHistoryTable();
+}
+function refreshBagsHistoryCard(){
+  const p=document.getElementById("bagsHistoryProduct")?.value||"",dates=bagsHistoryDates(p),d=dates[0]||"",ds=document.getElementById("bagsHistoryDate");
+  if(ds)ds.innerHTML=historyDateOptions(dates,d);
+  refreshBagsHistoryTable();
+}
+function refreshBagsHistoryTable(){
+  const p=document.getElementById("bagsHistoryProduct")?.value||"",d=document.getElementById("bagsHistoryDate")?.value||"",el=document.getElementById("bagsHistoryTable");
+  if(!el)return;
+  const rows=bagsHistoryRows(p).filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===d);
+  if(!rows.length){el.innerHTML='<div class="history-empty">No history available for selected date.</div>';return}
+  const r=rows[rows.length-1],v=k=>num(r[k]);
+  el.innerHTML=`<div class="history-table"><table><thead><tr><th>Date</th><th>Received</th><th>Issue</th><th>Damage</th><th>Closing</th></tr></thead><tbody><tr><td>${esc(d)}</td><td>${v("received")===null?"--":fmt(v("received"))}</td><td>${v("issue")===null?"--":fmt(v("issue"))}</td><td>${v("damage")===null?"--":fmt(v("damage"))}</td><td>${v("closing")===null?"--":fmt(v("closing"))}</td></tr></tbody></table></div>`;
+}
+
 function renderDashboard(){
   renderSmartHeader();
   renderQuick();
