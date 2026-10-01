@@ -171,6 +171,41 @@
     <div id="sparePartsList"><div class="empty">Loading spare parts...</div></div>
   </div>
 
+
+  <!-- REPORT CENTER -->
+  <div class="card report-center-card" id="reportCenterSection">
+    <div class="card-title">
+      <div><h2>📊 Report Center</h2><span>Complete plant reports • PDF • Excel • WhatsApp Copy</span></div>
+    </div>
+    <div class="report-range-bar">
+      <label>From Date<input type="date" id="reportFromDate"></label>
+      <label>To Date<input type="date" id="reportToDate"></label>
+      <button class="report-reset-btn" onclick="resetReportDates()">↺ Reset</button>
+    </div>
+    <div class="report-note">Select any date range. Reports use the actual data already loaded in the dashboard; no new values are calculated into the source data.</div>
+
+    <div class="report-main-card">
+      <div class="report-card-head"><div><strong>📕 Complete Dashboard Report</strong><small>Maximum available detail from all plant sections</small></div></div>
+      <div class="report-actions">
+        <button onclick="generateReportPDF('complete')">📄 PDF</button>
+        <button onclick="exportReportExcel('complete')">📊 Excel</button>
+        <button onclick="copyReportWhatsApp('complete')">📱 WhatsApp Copy</button>
+      </div>
+    </div>
+
+    <div class="report-section-grid">
+      <div class="report-main-card"><div class="report-card-head"><div><strong>📦 Raw Material</strong><small>Material • Date • Received • Consumption • Transfer • Closing</small></div></div><div class="report-actions"><button onclick="generateReportPDF('raw')">📄 PDF</button><button onclick="exportReportExcel('raw')">📊 Excel</button><button onclick="copyReportWhatsApp('raw')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>🌾 Feed Unit</strong><small>Product • Date • Production • Dispatch • Closing</small></div></div><div class="report-actions"><button onclick="generateReportPDF('feed')">📄 PDF</button><button onclick="exportReportExcel('feed')">📊 Excel</button><button onclick="copyReportWhatsApp('feed')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>🛍 PP Bags</strong><small>Product • Date • Received • Issue • Damage • Closing</small></div></div><div class="report-actions"><button onclick="generateReportPDF('bags')">📄 PDF</button><button onclick="exportReportExcel('bags')">📊 Excel</button><button onclick="copyReportWhatsApp('bags')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>🏭 Production</strong><small>Product-wise production records and performance</small></div></div><div class="report-actions"><button onclick="generateReportPDF('production')">📄 PDF</button><button onclick="exportReportExcel('production')">📊 Excel</button><button onclick="copyReportWhatsApp('production')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>🧪 Premix</strong><small>Premix transfer and monthly mix data</small></div></div><div class="report-actions"><button onclick="generateReportPDF('premix')">📄 PDF</button><button onclick="exportReportExcel('premix')">📊 Excel</button><button onclick="copyReportWhatsApp('premix')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>📊 Monthly Mix & Contribution</strong><small>RM consumption • Production • Dispatch by selected month</small></div></div><div class="report-actions"><button onclick="generateReportPDF('mix')">📄 PDF</button><button onclick="exportReportExcel('mix')">📊 Excel</button><button onclick="copyReportWhatsApp('mix')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>📋 RM Movements</strong><small>Stock • Consumption • Received • Transfer • Gain • Shortage • Sale</small></div></div><div class="report-actions"><button onclick="generateReportPDF('movements')">📄 PDF</button><button onclick="exportReportExcel('movements')">📊 Excel</button><button onclick="copyReportWhatsApp('movements')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>🔧 Spare Parts</strong><small>Stock • Reorder • Orders • Employee messages</small></div></div><div class="report-actions"><button onclick="generateReportPDF('spares')">📄 PDF</button><button onclick="exportReportExcel('spares')">📊 Excel</button><button onclick="copyReportWhatsApp('spares')">📱 WhatsApp</button></div></div>
+      <div class="report-main-card"><div class="report-card-head"><div><strong>⚠️ Data Health</strong><small>Reorder, reconciliation and available-data checks</small></div></div><div class="report-actions"><button onclick="generateReportPDF('health')">📄 PDF</button><button onclick="exportReportExcel('health')">📊 Excel</button><button onclick="copyReportWhatsApp('health')">📱 WhatsApp</button></div></div>
+    </div>
+  </div>
+
   <!-- TRENDS -->
   <div class="card" id="trendsSection">
     <div class="card-title"><h2>📊 Trends</h2><span id="dateTrends">Data through: --</span></div>
@@ -204,6 +239,9 @@
   </div>
 </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
