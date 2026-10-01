@@ -1323,7 +1323,9 @@ function renderStock(){
   const renderRows=(rows)=>rows.slice().sort((a,b)=>{const av=num(getMaterial(a)?.closing)||0,bv=num(getMaterial(b)?.closing)||0;return (bv>0)-(av>0)||bv-av;}).map(m=>{
     const x=getMaterial(m),closing=num(x?.closing)||0,avg=avgConsumption(m),st=stockStatus(closing,avg),unit=x?.unit||"MT";
     const dot=st.status==="REORDER"?"🔴":st.status==="WATCH"?"🟡":st.status==="OK"?"🟢":"⚪";
-    return `<div class="stock-row reorder-card" onclick="openMaterialDetails('${jsq(m)}')"><div class="reorder-card-top"><strong class="reorder-material">${esc(m)}</strong><span class="status-dot ${st.cls}" title="${esc(st.status)}" aria-label="${esc(st.status)}"></span></div><div class="reorder-card-metrics"><span><b>Stock</b><strong>${fmt(closing)} ${esc(unit)}</strong></span><span><b>Avg/day</b><strong>${avg?fmt(avg):"--"} ${esc(unit)}</strong></span><span><b>Cover</b><strong>${st.cover!==null?fmt(st.cover)+" d":"--"}</strong></span></div></div>`;
+    const coverText=st.cover!==null?fmt(st.cover)+" d":"--";
+    const statusText=st.status==="REORDER"?"Reorder":st.status==="WATCH"?"Watch":st.status==="OK"?"Healthy":"No history";
+    return `<div class="stock-row reorder-card" onclick="openMaterialDetails('${jsq(m)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')openMaterialDetails('${jsq(m)}')"><div class="reorder-card-top"><div class="reorder-title-wrap"><strong class="reorder-material">${esc(m)}</strong><span class="reorder-status-label ${st.cls}">${statusText}</span></div><div class="cover-badge ${st.cls}"><span class="status-dot ${st.cls}" title="${esc(st.status)}" aria-label="${esc(st.status)}"></span><strong>${coverText}</strong></div></div><div class="reorder-card-metrics"><span><b>Stock</b><strong>${fmt(closing)} ${esc(unit)}</strong></span><span><b>Avg/day</b><strong>${avg?fmt(avg):"--"} ${esc(unit)}</strong></span></div></div>`;
   }).join("")||"<div class='empty'>No stock data for this date</div>";
   const rawMats=mats.filter(m=>!isPremixMaterial(m));
   const premixMats=mats.filter(m=>isPremixMaterial(m));
