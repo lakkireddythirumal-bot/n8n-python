@@ -552,6 +552,16 @@ function renderMonthlyMix(){
   renderMixList("mixRmList",rm,rt);renderMixList("mixProdList",prod,pt);renderMixList("mixDispList",disp,dt);
 }
 function setMixMonth(m){MIX_MONTH=m||null;renderMonthlyMix()}
+function setMonthlyMixTab(type,btn){
+  const allowed=['rm','production','dispatch'];
+  const active=allowed.includes(type)?type:'rm';
+  document.querySelectorAll('.monthly-mix-tab').forEach(b=>b.classList.toggle('active',b.dataset.mixTab===active));
+  document.querySelectorAll('.monthly-mix-tab-panel').forEach(panel=>{
+    const show=panel.dataset.mixPanel===active;
+    panel.classList.toggle('active',show);
+    panel.hidden=!show;
+  });
+}
 function openMonthlyMixDetails(type){
   const m=MIX_MONTH||mixDefaultMonth(), label=monthLabel(m);
   let title="",rows=[];

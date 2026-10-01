@@ -970,3 +970,16 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 @media(max-width:700px){.report-range-bar{grid-template-columns:1fr 1fr}.report-reset-btn{grid-column:1/-1}.report-section-grid{grid-template-columns:1fr}.report-actions button{flex:1;min-width:0}}
 
 .report-history-filter{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:9px}.report-history-filter label{font-size:11px;font-weight:800;color:#667085;display:flex;flex-direction:column;gap:5px}.report-history-filter select{height:40px;border:1px solid #dfe5ee;border-radius:11px;padding:0 10px;background:#fff;color:#25324a;font-weight:700;min-width:0}.history-report-card{background:linear-gradient(145deg,#ffffff,#f7faff)!important}
+
+/* Monthly Mix compact tabs */
+.monthly-mix-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:9px 0 8px}
+.monthly-mix-tab{appearance:none;border:1px solid #e1e6ee;background:#f5f7fa;color:#657287;border-radius:10px;padding:8px 7px;font-size:11px;font-weight:800;line-height:1;cursor:pointer;box-shadow:none}
+.monthly-mix-tab.active{background:#263b63;color:#fff;border-color:#263b63;box-shadow:0 4px 10px rgba(38,59,99,.16)}
+.monthly-mix-tab-panels{min-width:0}
+.monthly-mix-tab-panel{display:none}
+.monthly-mix-tab-panel.active{display:block}
+.monthly-mix-tab-panel[hidden]{display:none!important}
+@media(max-width:700px){
+  .monthly-mix-tabs{gap:6px;margin:8px 0 7px}
+  .monthly-mix-tab{padding:9px 5px;font-size:10.5px}
+}

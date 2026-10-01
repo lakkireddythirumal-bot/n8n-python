@@ -58,29 +58,6 @@
     <div id="premixTransferList"><div class="empty">Loading...</div></div>
   </div>
 
-  <!-- MONTHLY MIX & CONTRIBUTION -->
-  <div class="card monthly-mix-card" id="monthlyMixSection">
-    <div class="card-title">
-      <div><h2>📊 Monthly Mix &amp; Contribution</h2><span id="dateMonthlyMix">Month: --</span></div>
-      <select id="mixMonthSelect" class="mix-month-select" onchange="setMixMonth(this.value)"></select>
-    </div>
-    <div class="monthly-mix-grid">
-      <div class="mix-panel rm">
-        <div class="mix-panel-head"><div><strong>🧪 RM Consumption Mix</strong><small id="mixRmTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('rm')">View All →</button></div>
-        <div id="mixRmList"><div class="empty">Loading...</div></div>
-      </div>
-      <div class="mix-panel prod">
-        <div class="mix-panel-head"><div><strong>🏭 Production Mix</strong><small id="mixProdTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('production')">View All →</button></div>
-        <div id="mixProdList"><div class="empty">Loading...</div></div>
-      </div>
-      <div class="mix-panel disp">
-        <div class="mix-panel-head"><div><strong>🚚 Dispatch Mix</strong><small id="mixDispTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('dispatch')">View All →</button></div>
-        <div id="mixDispList"><div class="empty">Loading...</div></div>
-      </div>
-    </div>
-    <div class="monthly-mix-note">Percentages are calculated against the selected month total. “Others” combines items outside Top 5.</div>
-  </div>
-
   <div class="desktop-grid">
     <!-- RAW MATERIAL REORDER -->
     <div class="card">
@@ -158,6 +135,35 @@
       <div class="card-title"><h2>🛍 PP Bags</h2><span id="datePPBags">Data: --</span></div>
       <div class="pp-grid" id="bagGrid"><div class="empty">Loading...</div></div>
     </div>
+
+
+  <!-- MONTHLY MIX & CONTRIBUTION -->
+  <div class="card monthly-mix-card" id="monthlyMixSection">
+    <div class="card-title">
+      <div><h2>📊 Monthly Mix &amp; Contribution</h2><span id="dateMonthlyMix">Month: --</span></div>
+      <select id="mixMonthSelect" class="mix-month-select" onchange="setMixMonth(this.value)"></select>
+    </div>
+    <div class="monthly-mix-tabs" role="tablist" aria-label="Monthly Mix">
+      <button type="button" class="monthly-mix-tab active" data-mix-tab="rm" onclick="setMonthlyMixTab('rm',this)">🧪 RM</button>
+      <button type="button" class="monthly-mix-tab" data-mix-tab="production" onclick="setMonthlyMixTab('production',this)">🏭 Production</button>
+      <button type="button" class="monthly-mix-tab" data-mix-tab="dispatch" onclick="setMonthlyMixTab('dispatch',this)">🚚 Dispatch</button>
+    </div>
+    <div class="monthly-mix-tab-panels">
+      <div class="mix-panel rm monthly-mix-tab-panel active" data-mix-panel="rm">
+        <div class="mix-panel-head"><div><strong>🧪 RM Consumption Mix</strong><small id="mixRmTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('rm')">View All →</button></div>
+        <div id="mixRmList"><div class="empty">Loading...</div></div>
+      </div>
+      <div class="mix-panel prod monthly-mix-tab-panel" data-mix-panel="production" hidden>
+        <div class="mix-panel-head"><div><strong>🏭 Production Mix</strong><small id="mixProdTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('production')">View All →</button></div>
+        <div id="mixProdList"><div class="empty">Loading...</div></div>
+      </div>
+      <div class="mix-panel disp monthly-mix-tab-panel" data-mix-panel="dispatch" hidden>
+        <div class="mix-panel-head"><div><strong>🚚 Dispatch Mix</strong><small id="mixDispTotal">Total -- MT</small></div><button onclick="openMonthlyMixDetails('dispatch')">View All →</button></div>
+        <div id="mixDispList"><div class="empty">Loading...</div></div>
+      </div>
+    </div>
+    <div class="monthly-mix-note">Percentages are calculated against the selected month total. “Others” combines items outside Top 5.</div>
+  </div>
 
   <!-- SPARE PARTS -->
   <div class="card spare-parts-card" id="sparePartsSection">
