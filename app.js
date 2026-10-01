@@ -1290,6 +1290,7 @@ function toggleFeedUnitMore(){feedUnitExpanded=!feedUnitExpanded;renderFeedUnit(
 
 function renderPPBags(){
   const rows=selectedBags(),el=document.getElementById("bagGrid");
+  if(!el)return;
   const seen=new Set();
   const uniqueRows=rows.filter(r=>{
     const key=normalize(r.product||"PP Bags");
@@ -1297,9 +1298,24 @@ function renderPPBags(){
     seen.add(key);
     return true;
   });
-  el.innerHTML=uniqueRows.slice().sort((a,b)=>(num(b.closing)||0)-(num(a.closing)||0)).map(r=>{
+  const sorted=uniqueRows.slice().sort((a,b)=>(num(b.closing)||0)-(num(a.closing)||0)).slice(0,10);
+  el.innerHTML=sorted.map(r=>{
     const p=r.product||"PP Bags";
-    return `<div class="pp-item" onclick="openBagProduct('${jsq(p)}')"><p>${esc(p)}</p><small class="pp-closing-label">Closing</small><strong class="pp-closing-number">${fmt(r.closing)}</strong><p style="margin-top:3px">Issue ${fmt(r.issue)} • Damage ${fmt(r.damage)}</p></div>`;
+    const opening=num(r.opening)||0, received=num(r.received)||0, issue=num(r.issue)||0, damage=num(r.damage)||0, closing=num(r.closing)||0;
+    const rec=ppBagReconciliation(p);
+    const status=rec.status==="MISMATCH"?"CHECK":(damage>0?"DAMAGE":"OK");
+    const statusCls=status.toLowerCase();
+    const statusIcon=status==="CHECK"?"⚠":(status==="DAMAGE"?"🟠":"✓");
+    return `<div class="pp-item pp-status-${statusCls}" role="button" tabindex="0" onclick="openBagProduct('${jsq(p)}')" onkeydown="if(event.key==='Enter'||event.key===' ')openBagProduct('${jsq(p)}')">
+      <div class="pp-card-head"><p title="${esc(p)}">${esc(p)}</p><span class="pp-status ${statusCls}" title="${status}">${statusIcon}</span></div>
+      <div class="pp-metrics">
+        <span><b>Open</b><strong>${fmt(opening)}</strong></span>
+        <span><b>Recv</b><strong>${fmt(received)}</strong></span>
+        <span><b>Issue</b><strong>${fmt(issue)}</strong></span>
+        <span><b>Damage</b><strong>${fmt(damage)}</strong></span>
+        <span class="pp-closing"><b>Close</b><strong>${fmt(closing)}</strong></span>
+      </div>
+    </div>`;
   }).join("")||"<div class='empty'>No PP Bag data for this date</div>";
 }
 function renderStock(){
