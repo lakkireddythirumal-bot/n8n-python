@@ -177,6 +177,7 @@ function applyData(apiData,fromCache=false){
     processLoss:apiData.processLoss??null,
     report_date:apiData.report_date??null
   };
+  invalidatePerfCache();
   if(DATA.report_date)setText("reportDate",VIEW_DATE||DATA.report_date);
   renderDashboard();
   if(!fromCache)saveCache(apiData);
@@ -1260,9 +1261,32 @@ function goTrend(){document.getElementById("trendsSection").scrollIntoView({beha
    DATE VIEW — COMPLETE DASHBOARD DATE FILTER
 ===================================================== */
 let VIEW_DATE=null;
+
+/* =====================================================
+   PERFORMANCE MEMOIZATION — invalidated when data/date changes
+===================================================== */
+const PERF_CACHE={
+  viewStock:null, historyStock:new Map(), materials:null, materialMap:null,
+  transactions:new Map(), production:null, bags:null, feedRows:null, latestFeed:null,
+  avgConsumption:new Map(), availableDates:null
+};
+function invalidatePerfCache(){
+  PERF_CACHE.viewStock=null;
+  PERF_CACHE.historyStock.clear();
+  PERF_CACHE.materials=null;
+  PERF_CACHE.materialMap=null;
+  PERF_CACHE.transactions.clear();
+  PERF_CACHE.production=null;
+  PERF_CACHE.bags=null;
+  PERF_CACHE.feedRows=null;
+  PERF_CACHE.latestFeed=null;
+  PERF_CACHE.avgConsumption.clear();
+  PERF_CACHE.availableDates=null;
+}
 function historyStockRowsForDate(date){
   const d=dateOnly(date);
   if(!d)return [];
+  if(PERF_CACHE.historyStock.has(d))return PERF_CACHE.historyStock.get(d);
   const grouped=new Map();
   (DATA.stockHistory||[]).forEach(t=>{
     if(dateOnly(rowDate(t))!==d)return;
@@ -1273,57 +1297,79 @@ function historyStockRowsForDate(date){
     grouped.get(key).transactions.push(t);
   });
   const current=new Map((DATA.stock||[]).map(x=>[normalize(x.material),x]));
-  return [...grouped.values()].map(g=>{
+  const result=[...grouped.values()].map(g=>{
     const base=current.get(normalize(g.material))||{};
     const closingRows=g.transactions.filter(t=>tType(t)==="CL. STOCK");
     const latestClosing=closingRows.length?closingRows[closingRows.length-1]:null;
     return {...base,material:g.material,transactions:g.transactions,closing:latestClosing?tVal(latestClosing):null};
   });
+  PERF_CACHE.historyStock.set(d,result);
+  return result;
 }
 function viewStockRows(){
+  if(PERF_CACHE.viewStock)return PERF_CACHE.viewStock;
   if(VIEW_DATE){
-    return historyStockRowsForDate(VIEW_DATE);
+    PERF_CACHE.viewStock=historyStockRowsForDate(VIEW_DATE);
+    return PERF_CACHE.viewStock;
   }
-  return (DATA.stock||[]).map(x=>{
+  PERF_CACHE.viewStock=(DATA.stock||[]).map(x=>{
     const tx=Array.isArray(x.transactions)?x.transactions:[];
     const closingRows=tx.filter(t=>tType(t)==="CL. STOCK");
     const latestClosing=closingRows.length?closingRows[closingRows.length-1]:null;
     return {...x,transactions:tx,closing:latestClosing?tVal(latestClosing):num(x.closing)};
   }).filter(x=>x.material);
+  return PERF_CACHE.viewStock;
 }
 function getMaterials(){
-  return [...new Set(viewStockRows().map(x=>clean(x.material)).filter(Boolean))];
+  if(PERF_CACHE.materials)return PERF_CACHE.materials;
+  PERF_CACHE.materials=[...new Set(viewStockRows().map(x=>clean(x.material)).filter(Boolean))];
+  return PERF_CACHE.materials;
 }
 function getMaterial(material){
-  return viewStockRows().find(x=>normalize(x.material)===normalize(material))||null;
+  if(!PERF_CACHE.materialMap){
+    PERF_CACHE.materialMap=new Map(viewStockRows().map(x=>[normalize(x.material),x]));
+  }
+  return PERF_CACHE.materialMap.get(normalize(material))||null;
 }
 function transactions(material){
+  const key=normalize(material);
+  if(PERF_CACHE.transactions.has(key))return PERF_CACHE.transactions.get(key);
   const x=getMaterial(material);
-  return x&&Array.isArray(x.transactions)?x.transactions:[];
+  const result=x&&Array.isArray(x.transactions)?x.transactions:[];
+  PERF_CACHE.transactions.set(key,result);
+  return result;
 }
 function selectedProduction(){
-  if(!VIEW_DATE)return Array.isArray(DATA.production)?DATA.production:[];
+  if(PERF_CACHE.production)return PERF_CACHE.production;
+  if(!VIEW_DATE){PERF_CACHE.production=Array.isArray(DATA.production)?DATA.production:[];return PERF_CACHE.production;}
   const d=dateOnly(VIEW_DATE);
   const history=Array.isArray(DATA.productionHistory)?DATA.productionHistory:[];
-  return history.filter(r=>dateOnly(r.report_date||r.Report_Date)===d);
+  PERF_CACHE.production=history.filter(r=>dateOnly(r.report_date||r.Report_Date)===d);
+  return PERF_CACHE.production;
 }
 function selectedBags(){
-  if(!VIEW_DATE)return Array.isArray(DATA.bags)?DATA.bags:[];
+  if(PERF_CACHE.bags)return PERF_CACHE.bags;
+  if(!VIEW_DATE){PERF_CACHE.bags=Array.isArray(DATA.bags)?DATA.bags:[];return PERF_CACHE.bags;}
   const d=dateOnly(VIEW_DATE);
   const history=Array.isArray(DATA.bagsHistory)?DATA.bagsHistory:[];
-  return history.filter(r=>dateOnly(r.report_date||r.Report_Date)===d);
+  PERF_CACHE.bags=history.filter(r=>dateOnly(r.report_date||r.Report_Date)===d);
+  return PERF_CACHE.bags;
 }
 function selectedFeedRows(){
+  if(PERF_CACHE.feedRows)return PERF_CACHE.feedRows;
   const rows=Array.isArray(DATA.feedUnitData)?DATA.feedUnitData:[];
-  return VIEW_DATE?rows.filter(r=>dateOnly(r.Report_Date||r.report_date)===dateOnly(VIEW_DATE)):rows;
+  PERF_CACHE.feedRows=VIEW_DATE?rows.filter(r=>dateOnly(r.Report_Date||r.report_date)===dateOnly(VIEW_DATE)):rows;
+  return PERF_CACHE.feedRows;
 }
 function latestFeedRows(){
-  const rows=selectedFeedRows(), latest={};
+  if(PERF_CACHE.latestFeed)return PERF_CACHE.latestFeed;
+  const rows=selectedFeedRows(),latest={};
   rows.forEach(r=>{
     const p=clean(r.Product||r.product);
     if(p)latest[normalize(p)]=r;
   });
-  return Object.values(latest);
+  PERF_CACHE.latestFeed=Object.values(latest);
+  return PERF_CACHE.latestFeed;
 }
 function latestTotal(key){
   return latestFeedRows().reduce((sum,r)=>{
@@ -1339,29 +1385,31 @@ function latestFeedClosingTotal(){
   },0);
 }
 function avgConsumption(material){
+  const key=normalize(material);
+  if(PERF_CACHE.avgConsumption.has(key))return PERF_CACHE.avgConsumption.get(key);
   const history=Array.isArray(DATA.stockHistory)?DATA.stockHistory:[];
-  const target=normalize(material);
   const dated=new Map();
   history.forEach(t=>{
-    if(normalize(t.material)!==target || !tType(t).includes("CONSUMPTION"))return;
+    if(normalize(t.material)!==key || !tType(t).includes("CONSUMPTION"))return;
     const d=dateOnly(rowDate(t));
     const v=num(t.for_day);
     if(!d || v===null || v<=0)return;
     dated.set(d,(dated.get(d)||0)+v);
   });
-  if(!dated.size)return 0;
-
+  if(!dated.size){PERF_CACHE.avgConsumption.set(key,0);return 0;}
   const availableDates=[...dated.keys()].sort();
   let anchor=dateOnly(VIEW_DATE);
   if(!anchor)anchor=availableDates[availableDates.length-1];
   const anchorTime=new Date(anchor+"T00:00:00").getTime();
   const startTime=anchorTime-29*86400000;
-  const values=[...dated.entries()]
-    .filter(([d])=>{const tm=new Date(d+"T00:00:00").getTime();return tm>=startTime && tm<=anchorTime;})
-    .map(([,v])=>v)
-    .filter(v=>v>0);
-  if(!values.length)return 0;
-  return values.reduce((a,b)=>a+b,0)/values.length;
+  let total=0,count=0;
+  dated.forEach((v,d)=>{
+    const tm=new Date(d+"T00:00:00").getTime();
+    if(tm>=startTime&&tm<=anchorTime&&v>0){total+=v;count++;}
+  });
+  const result=count?total/count:0;
+  PERF_CACHE.avgConsumption.set(key,result);
+  return result;
 }
 function renderQuick(){
   const pd=latestTotal("Production_Day_MT"),pm=latestTotal("Production_Month_MT");
@@ -1531,20 +1579,23 @@ function deleteManagerNote(key){localStorage.removeItem("manager_note_"+key);clo
 
 function setViewDate(date){
   VIEW_DATE=date?dateOnly(date):null;
+  invalidatePerfCache();
   closeModal();
   renderDashboard();
   renderTrends();
   showToast(VIEW_DATE?`Dashboard set to ${VIEW_DATE}`:"Dashboard set to latest");
 }
 function getAvailableDates(){
+  if(PERF_CACHE.availableDates)return PERF_CACHE.availableDates;
   const s=new Set();
   (DATA.stockHistory||[]).forEach(t=>{const d=dateOnly(rowDate(t));if(d)s.add(d)});
   (DATA.stock||[]).forEach(x=>(x.transactions||[]).forEach(t=>{const d=dateOnly(rowDate(t));if(d)s.add(d)}));
   (DATA.production||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date);if(d)s.add(d)});
   (DATA.bags||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date);if(d)s.add(d)});
-  (DATA.feedUnitData||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date);if(d)s.add(d)});
+  (DATA.feedUnitData||[]).forEach(r=>{const d=dateOnly(r.Report_Date||r.report_date);if(d)s.add(d)});
   if(DATA.report_date)s.add(dateOnly(DATA.report_date));
-  return [...s].filter(Boolean).sort().reverse();
+  PERF_CACHE.availableDates=[...s].filter(Boolean).sort().reverse();
+  return PERF_CACHE.availableDates;
 }
 function openDateSelector(){
   const dates=getAvailableDates();
