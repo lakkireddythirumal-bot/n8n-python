@@ -1596,7 +1596,16 @@ function accuracyTestDates(){
 function accuracyRawNum(v){const n=Number(v);return Number.isFinite(n)?n:null}
 function accuracyZero(v){const n=accuracyRawNum(v);return n!==null&&Math.abs(n)<1e-9?0:n}
 function accuracyStatus(ok,level="ERROR"){return ok?"PASS":level}
-function accuracyCheck(list,o){list.push({...o,status:o.status||"PASS"});}
+function accuracyCheck(list,o){
+  const x={...o};
+  const badNumeric=["expected","actual","difference"].some(k=>typeof x[k]==="number"&&!Number.isFinite(x[k]));
+  if(badNumeric){
+    delete x.expected; delete x.actual; delete x.difference;
+    x.status="PENDING";
+    x.message=(x.message?x.message+" • ":"")+"Numeric value unavailable; validation skipped";
+  }
+  list.push({...x,status:x.status||"PASS"});
+}
 function accuracyDateRows(rows,d,dateKeys=["report_date","Report_Date","date","DATE"]){
   return (rows||[]).filter(r=>{const vals=dateKeys.map(k=>r?.[k]).filter(Boolean);return vals.some(v=>dateOnly(v)===d)});
 }
@@ -1688,21 +1697,113 @@ function accuracyBagCarryChecks(dates,checks){
 function accuracySourceClosingChecks(d,checks){
   (DATA.stock||[]).forEach(x=>{const rows=accuracyStockDay(clean(x.material),d);if(!rows.length)return;const closes=rows.filter(t=>/CL\. STOCK|CLOSING STOCK/.test(tType(t))).map(t=>accuracyRawNum(t.for_day)).filter(v=>v!==null);const top=accuracyRawNum(x.closing);if(top!==null&&closes.length){const last=closes[closes.length-1];accuracyCheck(checks,{code:"SOURCE-CLOSE",category:"Source consistency",date:d,entity:clean(x.material),expected:last,actual:top,difference:top-last,status:Math.abs(top-last)<=0.01?"PASS":"CRITICAL",message:closes.some(v=>Math.abs(v-last)>0.01)?"Multiple closing values exist for same activity date":"Top-level closing vs CL. STOCK"});if(closes.some(v=>Math.abs(v-last)>0.01))accuracyCheck(checks,{code:"SOURCE-CONFLICT",category:"Source consistency",date:d,entity:clean(x.material),actual:closes.join(" / "),status:"CRITICAL",message:"Conflicting closing values on the same activity date"});}});
 }
+function accuracyIsMovementType(type){
+  const s=normalize(type);
+  if(!s)return false;
+
+  // Stock-state rows are not cumulative movements. Their continuity is
+  // validated by the opening/closing carry-forward and stock-balance checks.
+  if(s.includes("OPENING STOCK")||s.includes("CL. STOCK")||s.includes("CLOSING STOCK"))return false;
+
+  // Only transaction/movement rows participate in MTD roll-forward.
+  const movementWords=[
+    "PURCHASE","RECEIVED","RECEV","TRANSFER","CONSUMPTION","CONSUMPION",
+    "CONSUMP","SALE","DESPATCH","DISPATCH","SHORTAGE","DAMAGE","ISSUE",
+    "RETURN","GAIN","REPROCESS","PRODUCTION","ADJUSTMENT","ADJ","WASTAGE",
+    "BOMMAKAL","BMKL"
+  ];
+  return movementWords.some(k=>s.includes(k));
+}
+
+function accuracyDateDiffDays(a,b){
+  if(!a||!b)return null;
+  const ta=Date.parse(a+"T00:00:00"),tb=Date.parse(b+"T00:00:00");
+  if(!Number.isFinite(ta)||!Number.isFinite(tb))return null;
+  return Math.round((tb-ta)/86400000);
+}
+
 function accuracyCumulativeChecks(dates,checks){
   const txByMaterial={};
-  (DATA.stock||[]).forEach(x=>{txByMaterial[normalize(x.material)]=x.transactions||[];});
+  (DATA.stock||[]).forEach(x=>{
+    const key=normalize(x.material);
+    if(key)txByMaterial[key]=x.transactions||[];
+  });
+
   for(let i=1;i<dates.length;i++){
     const prev=dates[i-1],cur=dates[i];
+
+    // MTD values reset at a month boundary. Never compare September MTD
+    // with October MTD.
+    if(!prev||!cur||prev.slice(0,7)!==cur.slice(0,7))continue;
+
+    // If an activity date is missing between the two rows, the cumulative
+    // roll-forward cannot be proved from these two records alone.
+    // Leave it to the missing-date/pending logic instead of creating errors.
+    const gap=accuracyDateDiffDays(prev,cur);
+    if(gap!==1)continue;
+
     Object.entries(txByMaterial).forEach(([mat,rows])=>{
-      const types=new Set(rows.map(t=>tType(t)).filter(Boolean));
+      const types=[...new Set(rows.map(t=>tType(t)).filter(accuracyIsMovementType))];
+
       types.forEach(type=>{
-        const prevRow=rows.filter(t=>dateOnly(rowDate(t))===prev&&tType(t)===type).map(t=>accuracyRawNum(t.for_month)).filter(v=>v!==null).pop();
-        const curRow=rows.filter(t=>dateOnly(rowDate(t))===cur&&tType(t)===type).map(t=>accuracyRawNum(t.for_month)).filter(v=>v!==null).pop();
-        const day=rows.filter(t=>dateOnly(rowDate(t))===cur&&tType(t)===type).map(t=>accuracyRawNum(t.for_day)).filter(v=>v!==null).pop();
-        if(prevRow!==null&&curRow!==null&&day!==null&&new Date(cur)-new Date(prev)<=31*86400000){
-          const diff=curRow-prevRow-day;
-          accuracyCheck(checks,{code:"MTD",category:"Monthly cumulative",date:cur,entity:mat+" • "+type,expected:prevRow+day,actual:curRow,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:"Previous MTD + current day = current MTD"});
-          if(curRow<prevRow-0.01)accuracyCheck(checks,{code:"MTD-DOWN",category:"Cumulative decrease",date:cur,entity:mat+" • "+type,expected:`>= ${prevRow}`,actual:curRow,difference:curRow-prevRow,status:"ERROR",message:"Monthly cumulative decreased"});
+        const prevRows=rows
+          .filter(t=>dateOnly(rowDate(t))===prev&&tType(t)===type)
+          .map(t=>accuracyRawNum(t.for_month))
+          .filter(v=>v!==null);
+
+        const curRows=rows
+          .filter(t=>dateOnly(rowDate(t))===cur&&tType(t)===type)
+          .map(t=>accuracyRawNum(t.for_month))
+          .filter(v=>v!==null);
+
+        const dayRows=rows
+          .filter(t=>dateOnly(rowDate(t))===cur&&tType(t)===type)
+          .map(t=>accuracyRawNum(t.for_day))
+          .filter(v=>v!==null);
+
+        // Missing values are not an arithmetic failure. Do not emit NaN.
+        if(!prevRows.length||!curRows.length||!dayRows.length)return;
+
+        // If duplicate/conflicting source rows exist, the duplicate/conflict
+        // check reports them separately. Do not manufacture a cumulative
+        // ERROR from an arbitrary .pop() value.
+        const prevUnique=[...new Set(prevRows.map(v=>accuracyZero(v)))];
+        const curUnique=[...new Set(curRows.map(v=>accuracyZero(v)))];
+        const dayUnique=[...new Set(dayRows.map(v=>accuracyZero(v)))];
+        if(prevUnique.length!==1||curUnique.length!==1||dayUnique.length!==1)return;
+
+        const prevMtd=prevUnique[0],curMtd=curUnique[0],day=dayUnique[0];
+        if(!Number.isFinite(prevMtd)||!Number.isFinite(curMtd)||!Number.isFinite(day))return;
+
+        const expected=prevMtd+day;
+        const diff=curMtd-expected;
+
+        accuracyCheck(checks,{
+          code:"MTD",
+          category:"Monthly cumulative",
+          date:cur,
+          entity:mat+" • "+type,
+          expected,
+          actual:curMtd,
+          difference:diff,
+          status:Math.abs(diff)<=0.01?"PASS":"ERROR",
+          message:"Previous MTD + current day = current MTD"
+        });
+
+        // A cumulative movement should not decrease inside the same month.
+        // Keep the check independent from the arithmetic result.
+        if(curMtd<prevMtd-0.01){
+          accuracyCheck(checks,{
+            code:"MTD-DOWN",
+            category:"Cumulative decrease",
+            date:cur,
+            entity:mat+" • "+type,
+            expected:`>= ${prevMtd}`,
+            actual:curMtd,
+            difference:curMtd-prevMtd,
+            status:"ERROR",
+            message:"Monthly cumulative movement decreased"
+          });
         }
       });
     });
@@ -1748,7 +1849,7 @@ function openAccuracyTestDetails(filter){
   showModal(`🧪 3-Day Accuracy Details${filter?` • ${filter}`:""}`,html);
 }
 function openAccuracyTestPlan(){
-  const html=`<div class="detail-section"><h3>What is being tested</h3><div class="small-note">This is a temporary 3-day testing layer. It reads the existing JSON/API data only; it does not modify source values or dashboard calculations.</div><div class="accuracy-plan-grid">${["Activity Date consistency","Exact & conflicting duplicates","Negative values / -0 normalization","Raw material stock arithmetic","Opening → closing carry-forward","Monthly cumulative roll-forward","Feed Unit product arithmetic & totals","Production % / process-loss formulas","Production ↔ PP Bag cross-check","PP Bag arithmetic & carry-forward","Source closing conflicts","Missing required fields","Date lag / pending data","Consumption outliers","Cumulative decreases"].map(x=>`<span>✓ ${x}</span>`).join("")}</div></div><div class="detail-section"><h3>Severity rules</h3>${detail("CRITICAL","Conflicting source/duplicate values")}${detail("ERROR","Hard arithmetic or continuity failure")}${detail("REVIEW","Suspicious but potentially explainable difference")}${detail("WARNING","Incomplete/non-critical source field")}${detail("PENDING","Expected activity date not yet present")}${detail("PASS","Check reconciled within tolerance")}</div>`;
+  const html=`<div class="detail-section"><h3>What is being tested</h3><div class="small-note">This is a temporary 3-day testing layer. It reads the existing JSON/API data only; it does not modify source values or dashboard calculations.</div><div class="accuracy-plan-grid">${["Activity Date consistency","Exact & conflicting duplicates","Negative values / -0 normalization","Raw material stock arithmetic","Opening → closing carry-forward","Monthly cumulative movement roll-forward","Feed Unit product arithmetic & totals","Production % / process-loss formulas","Production ↔ PP Bag cross-check","PP Bag arithmetic & carry-forward","Source closing conflicts","Missing required fields","Date lag / pending data","Consumption outliers","Cumulative decreases"].map(x=>`<span>✓ ${x}</span>`).join("")}</div></div><div class="detail-section"><h3>Severity rules</h3>${detail("CRITICAL","Conflicting source/duplicate values")}${detail("ERROR","Hard arithmetic or continuity failure")}${detail("REVIEW","Suspicious but potentially explainable difference")}${detail("WARNING","Incomplete/non-critical source field")}${detail("PENDING","Expected activity date not yet present")}${detail("PASS","Check reconciled within tolerance")}</div>`;
   showModal("🧪 Accuracy Test Plan",html);
 }
 function renderAccuracyTestingLab(){
