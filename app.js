@@ -31,7 +31,7 @@ function clearDismissedAlerts(){DISMISSED_ALERTS.clear();saveDismissedAlerts();r
 function clean(v){return String(v??"").trim()}
 function normalize(v){return clean(v).replace(/\s+/g," ").toUpperCase()}
 function num(v){const n=Number(v);return Number.isFinite(n)?n:null}
-function fmt(v){if(v===null||v===undefined||v==="")return"--";const n=Number(v);if(!Number.isFinite(n))return String(v);const safe=n===0?0:n;return safe.toLocaleString("en-IN",{maximumFractionDigits:2})}
+function fmt(v){if(v===null||v===undefined||v==="")return"--";const n=Number(v);return Number.isFinite(n)?n.toLocaleString("en-IN",{maximumFractionDigits:2}):String(v)}
 function fmtMT(v){return v===null||v===undefined||v===""?"--":fmt(v)+" MT"}
 function isPremixProduct(name){return /PREMIX/i.test(clean(name));}
 function isPremixMaterial(name){return isPremixProduct(name);}
@@ -466,7 +466,7 @@ function mixAvailableMonths(){
   if(DATA.report_date){const m=monthKey(DATA.report_date);if(m)s.add(m)}
   return [...s].filter(Boolean).sort().reverse();
 }
-function mixDefaultMonth(){return monthKey(VIEW_DATE||DATA.report_date)||mixAvailableMonths()[0]||""}
+function mixDefaultMonth(){return monthKey(dashboardActivityDate()||DATA.report_date)||mixAvailableMonths()[0]||""}
 function isConsumptionMovement(ty){return ty.includes("CONSUMPTION")||ty.includes("CONSUMPION")||ty.includes("CONSUMPTON")||ty.includes("CONSUMPTI")}
 function allMixMaterialTransactions(){
   const out=[];
@@ -614,7 +614,7 @@ function latestPPBagDataDate(){
   return [a,b].filter(Boolean).sort().pop()||"";
 }
 function latestTrendDataDate(){
-  return [latestStockDataDate(),latestProductionDataDate(),latestFeedUnitDataDate(),latestPPBagDataDate(),dateOnly(DATA.report_date)].filter(Boolean).sort().pop()||"";
+  return [latestStockDataDate(),latestProductionDataDate(),latestFeedUnitDataDate(),latestPPBagDataDate()].filter(Boolean).sort().pop()||"";
 }
 function latestSpareDataDate(tab=spareTab){
   const rows=Array.isArray(SPARE_DATA[tab])?SPARE_DATA[tab]:[];
@@ -631,13 +631,14 @@ function latestSpareDataDate(tab=spareTab){
 }
 function updateSectionDates(){
   const selected=VIEW_DATE?dateOnly(VIEW_DATE):"";
-  const stockDate=selected||latestStockDataDate()||dateOnly(DATA.report_date);
-  const prodDate=selected||latestProductionDataDate()||dateOnly(DATA.report_date);
-  const feedDate=selected||latestFeedUnitDataDate()||dateOnly(DATA.report_date);
-  const bagDate=selected||latestPPBagDataDate()||dateOnly(DATA.report_date);
-  const trendDate=selected||latestTrendDataDate()||dateOnly(DATA.report_date);
-  setText("dateQuickView",formatSectionDate(selected||dateOnly(DATA.report_date)||trendDate));
-  setText("datePremix",formatSectionDate(selected||latestBommakalDate()||dateOnly(DATA.report_date)));
+  const activity=dashboardActivityDate();
+  const stockDate=selected||latestStockDataDate()||activity;
+  const prodDate=selected||latestProductionDataDate()||activity;
+  const feedDate=selected||latestFeedUnitDataDate()||activity;
+  const bagDate=selected||latestPPBagDataDate()||activity;
+  const trendDate=selected||latestTrendDataDate()||activity;
+  setText("dateQuickView",formatSectionDate(selected||activity||trendDate));
+  setText("datePremix",formatSectionDate(selected||latestBommakalDate()||activity));
   setText("dateMonthlyMix",MIX_MONTH?`Month: ${monthLabel(MIX_MONTH)}`:"Month: --");
   setText("dateRawReorder",formatSectionDate(stockDate));
   setText("dateProduction",formatSectionDate(prodDate));
@@ -971,7 +972,7 @@ function renderAttentionRequired(){
 }
 
 function renderSmartHeader(){
-  const d=selectedDateForIntelligence()||dateOnly(DATA.report_date)||"";
+  const d=selectedDateForIntelligence()||latestActivityDate()||"";
   setText("reportDate",d||"Latest");
   setText("selectedDateChip",VIEW_DATE?d:"Latest");
   setText("dateStripTitle",d?d:"Latest available day");
@@ -1040,17 +1041,6 @@ function renderAlerts(){
     const damage=num(r.damage)||0;
     if(damage>0)items.push({title:r.product||"PP Bags",msg:`PP bag damage recorded: ${fmt(damage)}`,type:"warning",icon:"👜"});
   });
-  // Advanced accuracy alerts: one alert per category to avoid flooding the notification panel.
-  const adv=dqAdvancedCounts();
-  if(adv.eq.length)items.push({title:"Data Accuracy",msg:`${adv.eq.length} stock equation mismatch${adv.eq.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.cl.length)items.push({title:"Data Accuracy",msg:`${adv.cl.length} closing vs CL.STOCK mismatch${adv.cl.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.mc.length)items.push({title:"Data Accuracy",msg:`${adv.mc.length} daily-to-month cumulative mismatch${adv.mc.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.yc.length)items.push({title:"Data Accuracy",msg:`${adv.yc.length} monthly-to-year cumulative mismatch${adv.yc.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.mo.length)items.push({title:"Data Accuracy",msg:`${adv.mo.length} month opening/closing mismatch${adv.mo.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.vi.length)items.push({title:"Data Accuracy",msg:`${adv.vi.length} invalid/negative value${adv.vi.length>1?"s":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.fc.length)items.push({title:"Data Accuracy",msg:`${adv.fc.length} field consistency issue${adv.fc.length>1?"s":""} detected`,type:"critical",icon:"🔬"});
-  if(adv.za.length)items.push({title:"Data Quality",msg:`${adv.za.length} zero-activity warning${adv.za.length>1?"s":""} detected`,type:"warning",icon:"🟡"});
-  if(adv.md.length)items.push({title:"Data Quality",msg:`${adv.md.length} missing-date gap${adv.md.length>1?"s":""} found — review only`,type:"warning",icon:"📅"});
   ALERTS=items.filter(a=>!DISMISSED_ALERTS.has(alertKey(a)));
   const badge=document.getElementById("notifyBadge");
   if(badge){badge.textContent=ALERTS.length>99?"99+":String(ALERTS.length);badge.classList.toggle("hidden",ALERTS.length===0)}
@@ -1289,20 +1279,23 @@ function transactions(material){
   return x&&Array.isArray(x.transactions)?x.transactions:[];
 }
 function selectedProduction(){
-  if(!VIEW_DATE)return Array.isArray(DATA.production)?DATA.production:[];
-  const d=dateOnly(VIEW_DATE);
+  const d=dashboardActivityDate();
+  const current=Array.isArray(DATA.production)?DATA.production:[];
   const history=Array.isArray(DATA.productionHistory)?DATA.productionHistory:[];
-  return history.filter(r=>dateOnly(r.report_date||r.Report_Date)===d);
+  const source=history.length?history:current;
+  return d?source.filter(r=>dateOnly(r.report_date||r.Report_Date||r.date)===d):current;
 }
 function selectedBags(){
-  if(!VIEW_DATE)return Array.isArray(DATA.bags)?DATA.bags:[];
-  const d=dateOnly(VIEW_DATE);
+  const d=dashboardActivityDate();
+  const current=Array.isArray(DATA.bags)?DATA.bags:[];
   const history=Array.isArray(DATA.bagsHistory)?DATA.bagsHistory:[];
-  return history.filter(r=>dateOnly(r.report_date||r.Report_Date)===d);
+  const source=history.length?history:current;
+  return d?source.filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===d):current;
 }
 function selectedFeedRows(){
   const rows=Array.isArray(DATA.feedUnitData)?DATA.feedUnitData:[];
-  return VIEW_DATE?rows.filter(r=>dateOnly(r.Report_Date||r.report_date)===dateOnly(VIEW_DATE)):rows;
+  const d=dashboardActivityDate();
+  return d?rows.filter(r=>dateOnly(r.Report_Date||r.report_date||r.date||r.DATE)===d):rows;
 }
 function latestFeedRows(){
   const rows=selectedFeedRows(), latest={};
@@ -1366,7 +1359,7 @@ function renderQuick(){
   });
   setText("qReceived",fmt(received)+" MT");setText("qConsumption",fmt(cons)+" MT");setText("qClosing",fmt(closing)+" MT");
   setText("qFeedClosing",fmtMT(latestFeedClosingTotal()));setText("qFeedClosingBagsMini",fmt(latestFeedClosingBagEquivalent())+" Bags");
-  setText("reportDate",VIEW_DATE||DATA.report_date||"Latest");
+  setText("reportDate",dashboardActivityDate()||"Latest activity");
   const reorderCount=getMaterials().filter(m=>stockStatus(num(getMaterial(m)?.closing)||0,avgConsumption(m)).status==="REORDER").length;
   const issueCount=reconciliationItems().filter(x=>x.r.status==="MISMATCH").length+feedUnitReconciliationItems().filter(x=>x.r.status==="MISMATCH").length+ppBagReconciliationItems().filter(x=>x.r.status==="MISMATCH").length+abnormalConsumptionItems().length+duplicateTransactionCount();
   const premixKg=premixBommakalTransfers().reduce((a,r)=>a+r.value,0);
@@ -1434,7 +1427,7 @@ function renderStock(){
 
 function renderControlCenter(){
   const m=dailyControlMetrics();
-  setText("controlDate",VIEW_DATE||DATA.report_date||"Latest data");
+  setText("controlDate",dashboardActivityDate()||"Latest activity");
   setText("ctlReorder",String(m.reorder));setText("ctlMismatch",String(m.mismatches+(m.abnormal?m.abnormal:0)));
   setText("ctlEfficiency",m.efficiency===null?"--":fmt(m.efficiency)+"%");
   setText("ctlLoss",m.loss===null?"--":fmt(m.loss)+"%");
@@ -1452,7 +1445,7 @@ function dailyControlMetrics(){
   const damage=selectedBags().reduce((a,r)=>a+(num(r.damage)||0),0);
   return {reorder,mismatches,abnormal,efficiency:outs.length?outs.reduce((a,b)=>a+b,0)/outs.length:null,loss:losses.length?losses.reduce((a,b)=>a+b,0)/losses.length:null,premix,damage};
 }
-function currentViewKey(){return VIEW_DATE?dateOnly(VIEW_DATE):dateOnly(DATA.report_date)||"latest"}
+function currentViewKey(){return dashboardActivityDate()||"latest"}
 function allAvailableDates(){return getAvailableDates()}
 function feedRowsForDate(d){
   return (DATA.feedUnitData||[]).filter(r=>dateOnly(r.Report_Date||r.report_date)===dateOnly(d));
@@ -1466,7 +1459,21 @@ function dateFeedMetrics(d){
     rows:rows.length
   };
 }
-function selectedDateForIntelligence(){return VIEW_DATE?dateOnly(VIEW_DATE):dateOnly(DATA.report_date)}
+function latestActivityDate(){
+  const dates=[];
+  const add=v=>{const d=dateOnly(v);if(d)dates.push(d)};
+  (DATA.stockHistory||[]).forEach(r=>add(rowDate(r)));
+  (DATA.stock||[]).forEach(r=>{(r.transactions||[]).forEach(t=>add(rowDate(t)));});
+  (DATA.productionHistory||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date));
+  (DATA.production||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date));
+  (DATA.productionTrend||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date));
+  (DATA.feedUnitData||[]).forEach(r=>add(r.Report_Date||r.report_date||r.date||r.DATE));
+  (DATA.bagsHistory||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date||r.DATE));
+  (DATA.bags||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date||r.DATE));
+  return dates.sort().pop()||"";
+}
+function dashboardActivityDate(){return VIEW_DATE?dateOnly(VIEW_DATE):latestActivityDate();}
+function selectedDateForIntelligence(){return dashboardActivityDate()}
 function completedComparisonDates(d){
   const dates=allAvailableDates();
   const idx=dates.indexOf(dateOnly(d));
@@ -1530,7 +1537,6 @@ function getAvailableDates(){
   (DATA.production||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date);if(d)s.add(d)});
   (DATA.bags||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date);if(d)s.add(d)});
   (DATA.feedUnitData||[]).forEach(r=>{const d=dateOnly(r.report_date||r.Report_Date);if(d)s.add(d)});
-  if(DATA.report_date)s.add(dateOnly(DATA.report_date));
   return [...s].filter(Boolean).sort().reverse();
 }
 function openDateSelector(){
@@ -1566,6 +1572,190 @@ function bagTrend(){
   return {labels,values}
 }
 
+
+/* =====================================================
+   3-DAY TOTAL DATA ACCURACY LAB — TEST ONLY
+   Uses Activity Date only. Does not change source DATA.
+===================================================== */
+function accuracyActivityDates(){
+  const s=new Set(), add=v=>{const d=dateOnly(v);if(d)s.add(d)};
+  (DATA.stock||[]).forEach(r=>(r.transactions||[]).forEach(t=>add(rowDate(t))));
+  (DATA.stockHistory||[]).forEach(r=>add(rowDate(r)));
+  (DATA.production||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date));
+  (DATA.productionHistory||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date));
+  (DATA.feedUnitData||[]).forEach(r=>add(r.Report_Date||r.report_date||r.date||r.DATE));
+  (DATA.feedUnitTotals||[]).forEach(r=>add(r.Report_Date||r.report_date||r.date||r.DATE));
+  (DATA.bags||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date||r.DATE));
+  (DATA.bagsHistory||[]).forEach(r=>add(r.report_date||r.Report_Date||r.date||r.DATE));
+  return [...s].sort();
+}
+function accuracyTestDates(){
+  const all=accuracyActivityDates();
+  return all.slice(-3);
+}
+function accuracyRawNum(v){const n=Number(v);return Number.isFinite(n)?n:null}
+function accuracyZero(v){const n=accuracyRawNum(v);return n!==null&&Math.abs(n)<1e-9?0:n}
+function accuracyStatus(ok,level="ERROR"){return ok?"PASS":level}
+function accuracyCheck(list,o){list.push({...o,status:o.status||"PASS"});}
+function accuracyDateRows(rows,d,dateKeys=["report_date","Report_Date","date","DATE"]){
+  return (rows||[]).filter(r=>{const vals=dateKeys.map(k=>r?.[k]).filter(Boolean);return vals.some(v=>dateOnly(v)===d)});
+}
+function accuracyTxRows(d){
+  const out=[];
+  (DATA.stock||[]).forEach(m=>(m.transactions||[]).forEach(t=>{if(dateOnly(rowDate(t))===d)out.push({material:clean(m.material),t});}));
+  return out;
+}
+function accuracyStockDay(material,d){
+  const x=(DATA.stock||[]).find(r=>normalize(r.material)===normalize(material));
+  return (x?.transactions||[]).filter(t=>dateOnly(rowDate(t))===d);
+}
+function accuracyStockBalanceChecks(d,checks){
+  (DATA.stock||[]).forEach(x=>{
+    const material=clean(x.material); if(!material)return;
+    const rows=accuracyStockDay(material,d); if(!rows.length)return;
+    let opening=null,closing=null,add=0,out=0,hasMovement=false;
+    rows.forEach(t=>{
+      const ty=tType(t), v=accuracyZero(t.for_day??t.value??t.quantity??t.qty);
+      if(v===null)return;
+      if(ty.includes("OPENING STOCK"))opening=v;
+      else if(ty.includes("CL. STOCK")||ty.includes("CLOSING STOCK"))closing=v;
+      else if(ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("TRANSFER FROM")||ty==="GAIN"){add+=v;hasMovement=true;}
+      else if(ty.includes("CONSUMPTION")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("TRANSFER TO")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN TO")){out+=v;hasMovement=true;}
+    });
+    if(opening===null||closing===null||!hasMovement)return;
+    const calc=opening+add-out,diff=closing-calc;
+    accuracyCheck(checks,{code:"RM-BALANCE",category:"Stock arithmetic",date:d,entity:material,expected:calc,actual:closing,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:`Opening + additions − deductions = closing`});
+  });
+}
+function accuracyCarryForwardChecks(dates,checks){
+  for(let i=1;i<dates.length;i++){
+    const prev=dates[i-1],cur=dates[i];
+    (DATA.stock||[]).forEach(x=>{
+      const mat=clean(x.material), a=accuracyStockDay(mat,prev), b=accuracyStockDay(mat,cur); if(!a.length||!b.length)return;
+      const pc=a.filter(t=>/CL\. STOCK|CLOSING STOCK/.test(tType(t))).map(t=>accuracyZero(t.for_day)).filter(v=>v!==null).pop();
+      const co=b.filter(t=>tType(t).includes("OPENING STOCK")).map(t=>accuracyZero(t.for_day)).filter(v=>v!==null).pop();
+      if(pc===null||co===null)return;
+      const diff=co-pc;
+      accuracyCheck(checks,{code:"RM-CARRY",category:"Opening → closing",date:cur,entity:mat,expected:pc,actual:co,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:`${prev} closing should carry to ${cur} opening`});
+    });
+  }
+}
+function accuracyDuplicateChecks(dates,checks){
+  const scan=(rows,keyFn,label)=>{
+    const map=new Map();
+    rows.forEach((r,i)=>{const k=keyFn(r);if(!k)return;if(!map.has(k))map.set(k,[]);map.get(k).push({r,i});});
+    map.forEach(items=>{if(items.length<2)return;const vals=new Set(items.map(x=>JSON.stringify(x.r)));accuracyCheck(checks,{code:"DUP",category:label,date:dateOnly(keyFn(items[0].r).split("|")[0]),entity:keyFn(items[0].r).split("|").slice(1).join(" | "),actual:items.length,expected:1,status:vals.size===1?"ERROR":"CRITICAL",message:vals.size===1?`Exact duplicate rows: ${items.length}`:`Conflicting duplicate rows: ${items.length}`,items});});
+  };
+  dates.forEach(d=>{
+    const tx=accuracyTxRows(d); scan(tx.map(x=>({...x.t,__material:x.material})),r=>`${d}|${r.__material}|${tType(r)}|${accuracyRawNum(r.for_day??r.value??r.quantity??r.qty)??""}|${r.for_month??""}|${r.for_year??""}`,"Raw material transactions");
+    const feed=accuracyDateRows(DATA.feedUnitData,d).map(r=>({...r,__product:clean(r.Product||r.product)})); scan(feed,r=>`${d}|${normalize(r.__product)}`,"Feed Unit product");
+    const prod=accuracyDateRows(DATA.productionHistory?.length?DATA.productionHistory:DATA.production,d).map(r=>({...r,__product:clean(r.product||r.Product)})); scan(prod,r=>`${d}|${normalize(r.__product)}|${r.actual_output??""}|${r.standard_output??""}|${r.output_percentage??""}|${r.process_loss??""}`,"Production");
+    const bags=accuracyDateRows(DATA.bagsHistory?.length?DATA.bagsHistory:DATA.bags,d).map(r=>({...r,__product:clean(r.product||r.Product)})); scan(bags,r=>`${d}|${normalize(r.__product)}|${r.opening??""}|${r.received??""}|${r.issue??""}|${r.damage??""}|${r.closing??""}`,"PP Bags");
+  });
+}
+function accuracyNegativeChecks(dates,checks){
+  dates.forEach(d=>{
+    accuracyTxRows(d).forEach(({material,t})=>{const fields=["for_day","for_month","for_year"];fields.forEach(f=>{const raw=accuracyRawNum(t[f]);const v=accuracyZero(raw);if(v!==null&&v<0)accuracyCheck(checks,{code:"NEG",category:"Negative values",date:d,entity:material,actual:raw,status:"ERROR",message:`Negative ${f} in ${tType(t)}`});});});
+    accuracyDateRows(DATA.feedUnitData,d).forEach(r=>["Opening_Day_MT","Production_Day_MT","Dispatch_Day_MT","Transfer_Day_MT","Closing_Day_MT"].forEach(f=>{const raw=accuracyRawNum(r[f]);if(accuracyZero(raw)!==null&&accuracyZero(raw)<0)accuracyCheck(checks,{code:"NEG",category:"Negative values",date:d,entity:clean(r.Product||r.product),actual:raw,status:"ERROR",message:`Negative ${f}`});}));
+    accuracyDateRows(DATA.bagsHistory?.length?DATA.bagsHistory:DATA.bags,d).forEach(r=>["opening","received","issue","damage","closing"].forEach(f=>{const raw=accuracyRawNum(r[f]);if(accuracyZero(raw)!==null&&accuracyZero(raw)<0)accuracyCheck(checks,{code:"NEG",category:"Negative values",date:d,entity:clean(r.product),actual:raw,status:"ERROR",message:`Negative ${f}`});}));
+  });
+}
+function accuracyFeedChecks(d,checks){
+  const rows=accuracyDateRows(DATA.feedUnitData,d); const seen=new Map();
+  rows.forEach(r=>{const p=clean(r.Product||r.product);if(!p)return;seen.set(normalize(p),r);});
+  seen.forEach((r,p)=>{
+    const opening=accuracyRawNum(r.Opening_Day_MT??r.opening_day_mt??r.Opening_Day??r.opening_day??r.Opening??r.opening), prod=accuracyRawNum(r.Production_Day_MT??r.production_day_mt??r.Production_Day??r.production_day??r.Production??r.production), transfer=accuracyRawNum(r.Transfer_Day_MT??r.transfer_day_mt??r.Transfer??r.transfer), dispatch=accuracyRawNum(r.Dispatch_Day_MT??r.dispatch_day_mt??r.Dispatch??r.dispatch), closing=accuracyRawNum(r.Closing_Day_MT??r.closing_day_mt??r.Closing_Day??r.closing_day??r.Closing??r.closing);
+    if(opening!==null&&closing!==null){const calc=opening+(prod||0)+(transfer||0)-(dispatch||0),diff=closing-calc;accuracyCheck(checks,{code:"FEED-BALANCE",category:"Feed Unit arithmetic",date:d,entity:p,expected:calc,actual:closing,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:"Opening + production + transfer − dispatch = closing"});}
+  });
+  const total=rows.reduce((a,r)=>a+(num(r.Production_Day_MT??r.production_day_mt??r.Production_Day??r.production_day??r.Production??r.production)||0),0);
+  const disp=rows.reduce((a,r)=>a+(num(r.Dispatch_Day_MT??r.dispatch_day_mt??r.Dispatch_Day??r.dispatch_day??r.Dispatch??r.dispatch)||0),0);
+  const summary=(DATA.feedUnitTotals||[]).find(r=>dateOnly(r.Report_Date||r.report_date||r.date||r.DATE)===d);
+  if(summary){const sp=num(summary.Production_Day_MT??summary.production_day_mt??summary.Production_Day??summary.production_day??summary.Production);const sd=num(summary.Dispatch_Day_MT??summary.dispatch_day_mt??summary.Dispatch_Day??summary.dispatch_day??summary.Dispatch);if(sp!==null)accuracyCheck(checks,{code:"FEED-TOTAL",category:"Feed Unit totals",date:d,entity:"Production total",expected:sp,actual:total,difference:total-sp,status:Math.abs(total-sp)<=0.01?"PASS":"ERROR",message:"Product day production = Feed Unit total"});if(sd!==null)accuracyCheck(checks,{code:"FEED-TOTAL",category:"Feed Unit totals",date:d,entity:"Dispatch total",expected:sd,actual:disp,difference:disp-sd,status:Math.abs(disp-sd)<=0.01?"PASS":"ERROR",message:"Product day dispatch = Feed Unit total"});}
+}
+function accuracyProductionChecks(d,checks){
+  const rows=accuracyDateRows(DATA.productionHistory?.length?DATA.productionHistory:DATA.production,d);
+  rows.forEach(r=>{const p=clean(r.product||r.Product),std=accuracyRawNum(r.standard_output),act=accuracyRawNum(r.actual_output),op=accuracyRawNum(r.output_percentage),loss=accuracyRawNum(r.process_loss);if(std!==null&&std>0&&act!==null){const calc=act/std*100;if(op!==null)accuracyCheck(checks,{code:"PROD-%",category:"Production formula",date:d,entity:p,expected:calc,actual:op,difference:op-calc,status:Math.abs(op-calc)<=0.05?"PASS":"ERROR",message:"Actual ÷ standard × 100 = output %"});if(loss!==null)accuracyCheck(checks,{code:"PROD-LOSS",category:"Production formula",date:d,entity:p,expected:100-calc,actual:loss,difference:loss-(100-calc),status:Math.abs(loss-(100-calc))<=0.05?"PASS":"ERROR",message:"100 − output % = process loss %"});if(op!==null&&op>100)accuracyCheck(checks,{code:"PROD-REVIEW",category:"Production review",date:d,entity:p,actual:op,status:"REVIEW",message:"Output exceeds 100%; verify source/remarks"});}});
+}
+function accuracyBagChecks(d,checks){
+  const rows=accuracyDateRows(DATA.bagsHistory?.length?DATA.bagsHistory:DATA.bags,d), map=new Map();
+  rows.forEach(r=>{const p=clean(r.product||r.Product);if(p)map.set(normalize(p),r);});
+  map.forEach((r,p)=>{const o=accuracyRawNum(r.opening),rec=accuracyRawNum(r.received),i=accuracyRawNum(r.issue),dam=accuracyRawNum(r.damage),c=accuracyRawNum(r.closing);if(o!==null&&c!==null){const calc=o+(rec||0)-(i||0)-(dam||0),diff=c-calc;accuracyCheck(checks,{code:"BAG-BALANCE",category:"PP Bag arithmetic",date:d,entity:p,expected:calc,actual:c,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:"Opening + received − issue − damage = closing"});}});
+}
+function accuracyBagCarryChecks(dates,checks){
+  const src=DATA.bagsHistory?.length?DATA.bagsHistory:DATA.bags;
+  for(let i=1;i<dates.length;i++){const a=dates[i-1],b=dates[i],ra=accuracyDateRows(src,a),rb=accuracyDateRows(src,b);const amap=new Map(ra.map(r=>[normalize(r.product||r.Product),accuracyRawNum(r.closing)]));rb.forEach(r=>{const p=normalize(r.product||r.Product),prev=amap.get(p),open=accuracyRawNum(r.opening);if(prev!==undefined&&prev!==null&&open!==null){const diff=open-prev;accuracyCheck(checks,{code:"BAG-CARRY",category:"PP Bag carry-forward",date:b,entity:p,expected:prev,actual:open,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:`${a} closing should carry to ${b} opening`});}});}
+}
+function accuracySourceClosingChecks(d,checks){
+  (DATA.stock||[]).forEach(x=>{const rows=accuracyStockDay(clean(x.material),d);if(!rows.length)return;const closes=rows.filter(t=>/CL\. STOCK|CLOSING STOCK/.test(tType(t))).map(t=>accuracyRawNum(t.for_day)).filter(v=>v!==null);const top=accuracyRawNum(x.closing);if(top!==null&&closes.length){const last=closes[closes.length-1];accuracyCheck(checks,{code:"SOURCE-CLOSE",category:"Source consistency",date:d,entity:clean(x.material),expected:last,actual:top,difference:top-last,status:Math.abs(top-last)<=0.01?"PASS":"CRITICAL",message:closes.some(v=>Math.abs(v-last)>0.01)?"Multiple closing values exist for same activity date":"Top-level closing vs CL. STOCK"});if(closes.some(v=>Math.abs(v-last)>0.01))accuracyCheck(checks,{code:"SOURCE-CONFLICT",category:"Source consistency",date:d,entity:clean(x.material),actual:closes.join(" / "),status:"CRITICAL",message:"Conflicting closing values on the same activity date"});}});
+}
+function accuracyCumulativeChecks(dates,checks){
+  const txByMaterial={};
+  (DATA.stock||[]).forEach(x=>{txByMaterial[normalize(x.material)]=x.transactions||[];});
+  for(let i=1;i<dates.length;i++){
+    const prev=dates[i-1],cur=dates[i];
+    Object.entries(txByMaterial).forEach(([mat,rows])=>{
+      const types=new Set(rows.map(t=>tType(t)).filter(Boolean));
+      types.forEach(type=>{
+        const prevRow=rows.filter(t=>dateOnly(rowDate(t))===prev&&tType(t)===type).map(t=>accuracyRawNum(t.for_month)).filter(v=>v!==null).pop();
+        const curRow=rows.filter(t=>dateOnly(rowDate(t))===cur&&tType(t)===type).map(t=>accuracyRawNum(t.for_month)).filter(v=>v!==null).pop();
+        const day=rows.filter(t=>dateOnly(rowDate(t))===cur&&tType(t)===type).map(t=>accuracyRawNum(t.for_day)).filter(v=>v!==null).pop();
+        if(prevRow!==null&&curRow!==null&&day!==null&&new Date(cur)-new Date(prev)<=31*86400000){
+          const diff=curRow-prevRow-day;
+          accuracyCheck(checks,{code:"MTD",category:"Monthly cumulative",date:cur,entity:mat+" • "+type,expected:prevRow+day,actual:curRow,difference:diff,status:Math.abs(diff)<=0.01?"PASS":"ERROR",message:"Previous MTD + current day = current MTD"});
+          if(curRow<prevRow-0.01)accuracyCheck(checks,{code:"MTD-DOWN",category:"Cumulative decrease",date:cur,entity:mat+" • "+type,expected:`>= ${prevRow}`,actual:curRow,difference:curRow-prevRow,status:"ERROR",message:"Monthly cumulative decreased"});
+        }
+      });
+    });
+  }
+}
+function accuracyDateChecks(dates,checks){
+  const report=dateOnly(DATA.report_date), latest=dates[dates.length-1];
+  if(report&&latest){accuracyCheck(checks,{code:"DATE-LAG",category:"Activity date",date:latest,entity:"Report vs activity",expected:report,actual:latest,status:latest===report?"PASS":"REVIEW",message:latest===report?"Report date and activity date match":"Report date is later than latest actual activity date; report date is not used as activity date"});}
+  if(report&&!dates.includes(report))accuracyCheck(checks,{code:"DATE-PENDING",category:"Activity date",date:report,entity:"Latest report date",expected:"Activity record for report date",actual:"No actual activity record",status:"PENDING",message:"Report generated for this date but actual activity data is not yet present"});
+}
+function accuracyMissingFieldChecks(dates,checks){
+  dates.forEach(d=>{
+    accuracyDateRows(DATA.feedUnitData,d).forEach(r=>{const p=clean(r.Product||r.product);if(!p)return;["Opening_Day_MT","Closing_Day_MT"].forEach(f=>{if(accuracyRawNum(r[f])===null&&r[f]!==""&&r[f]!==0)accuracyCheck(checks,{code:"MISSING",category:"Missing required field",date:d,entity:p,actual:f,status:"WARNING",message:`Missing ${f}`});});});
+    accuracyDateRows(DATA.bagsHistory?.length?DATA.bagsHistory:DATA.bags,d).forEach(r=>{const p=clean(r.product);["opening","closing"].forEach(f=>{if(accuracyRawNum(r[f])===null)accuracyCheck(checks,{code:"MISSING",category:"Missing required field",date:d,entity:p,actual:f,status:"WARNING",message:`Missing ${f}`});});});
+  });
+}
+function accuracyOutlierChecks(dates,checks){
+  if(dates.length<3)return;
+  const cur=dates[dates.length-1], prev=dates.slice(0,-1);
+  const current={}; accuracyTxRows(cur).forEach(({material,t})=>{if(tType(t).includes("CONSUMPTION"))current[normalize(material)]=(current[normalize(material)]||0)+(accuracyRawNum(t.for_day)||0);});
+  const history={}; prev.forEach(d=>accuracyTxRows(d).forEach(({material,t})=>{if(tType(t).includes("CONSUMPTION")){const k=normalize(material);if(!history[k])history[k]=[];history[k].push(accuracyRawNum(t.for_day)||0);}}));
+  Object.entries(current).forEach(([m,v])=>{const h=history[m]||[];if(h.length&&v>0){const avg=h.reduce((a,b)=>a+b,0)/h.length;if(avg>0&&(v>avg*2||v<avg*0.25))accuracyCheck(checks,{code:"OUTLIER",category:"Outlier review",date:cur,entity:m,expected:avg,actual:v,difference:v-avg,status:"REVIEW",message:"Current consumption is unusually different from the previous two activity days"});}});
+}
+function accuracyThreeDayChecks(){
+  const dates=accuracyTestDates(),checks=[];
+  if(!dates.length)return {dates,checks};
+  accuracyDateChecks(dates,checks); accuracyDuplicateChecks(dates,checks); accuracyNegativeChecks(dates,checks);
+  dates.forEach(d=>{accuracyStockBalanceChecks(d,checks);accuracyFeedChecks(d,checks);accuracyProductionChecks(d,checks);accuracyBagChecks(d,checks);accuracySourceClosingChecks(d,checks);});
+  accuracyCarryForwardChecks(dates,checks); accuracyBagCarryChecks(dates,checks); accuracyCumulativeChecks(dates,checks); accuracyMissingFieldChecks(dates,checks); accuracyOutlierChecks(dates,checks);
+  // Explicitly report cross-source production vs PP-bag issue where a direct product-code mapping is available.
+  const aliases={BFP:"BFP",LCr:"LCr","CHICK CR":"CHICK CR",PSC:"PSC",GCR:"GCr",GCON:"GCON",FC30:"FC30","LCr50KG":"LCr50kg","CHICK CR50KG":"Chick Cr50kg"};
+  const pRows=DATA.productionHistory?.length?DATA.productionHistory:DATA.production, bRows=DATA.bagsHistory?.length?DATA.bagsHistory:DATA.bags;
+  dates.forEach(d=>{accuracyDateRows(pRows,d).forEach(p=>{const code=clean(p.product||p.Product), key=aliases[code]||aliases[normalize(code)];if(!key)return;const b=accuracyDateRows(bRows,d).find(x=>normalize(x.product||x.Product)===normalize(key));if(!b)return;const act=accuracyRawNum(p.actual_output),issue=accuracyRawNum(b.issue);if(act!==null&&issue!==null&&act>0&&issue>0)accuracyCheck(checks,{code:"PROD-BAG",category:"Production ↔ PP Bags",date:d,entity:code,expected:act,actual:issue,difference:issue-act,status:Math.abs(issue-act)<=Math.max(1,act*0.02)?"PASS":"REVIEW",message:"Production output and PP bag issue cross-check; review differences for packing/reconciliation explanations"});});});
+  return {dates,checks};
+}
+function accuracySeverityClass(s){return s==="CRITICAL"?"accuracy-critical":s==="ERROR"?"accuracy-error":s==="REVIEW"?"accuracy-review":s==="WARNING"?"accuracy-warning":s==="PENDING"?"accuracy-pending":"accuracy-pass"}
+function openAccuracyTestDetails(filter){
+  const data=accuracyThreeDayChecks(), rows=filter?data.checks.filter(x=>x.status===filter):data.checks;
+  const groups=[...new Set(rows.map(x=>x.category))];
+  let html=`<div class="accuracy-detail-head"><strong>Test window</strong><span>${data.dates.join(" → ")||"No activity dates"}</span></div>`;
+  if(!rows.length)html+=`<div class="empty">No results for this filter.</div>`;
+  groups.forEach(g=>{html+=`<div class="detail-section"><h3>${esc(g)} • ${rows.filter(x=>x.category===g).length}</h3>`;rows.filter(x=>x.category===g).slice(0,200).forEach(x=>{html+=`<div class="accuracy-result ${accuracySeverityClass(x.status)}"><div class="accuracy-result-top"><strong>${esc(x.entity||"General")}</strong><span>${esc(x.status)}</span></div>${detail("Date",x.date||"--")}${detail("Check",x.message||x.code)}${x.expected!==undefined?detail("Expected",typeof x.expected==="string"?x.expected:fmt(x.expected)):""}${x.actual!==undefined?detail("Actual",typeof x.actual==="string"?x.actual:fmt(x.actual)):""}${x.difference!==undefined?detail("Difference",fmt(x.difference)):""}</div>`});html+=`</div>`;});
+  showModal(`🧪 3-Day Accuracy Details${filter?` • ${filter}`:""}`,html);
+}
+function openAccuracyTestPlan(){
+  const html=`<div class="detail-section"><h3>What is being tested</h3><div class="small-note">This is a temporary 3-day testing layer. It reads the existing JSON/API data only; it does not modify source values or dashboard calculations.</div><div class="accuracy-plan-grid">${["Activity Date consistency","Exact & conflicting duplicates","Negative values / -0 normalization","Raw material stock arithmetic","Opening → closing carry-forward","Monthly cumulative roll-forward","Feed Unit product arithmetic & totals","Production % / process-loss formulas","Production ↔ PP Bag cross-check","PP Bag arithmetic & carry-forward","Source closing conflicts","Missing required fields","Date lag / pending data","Consumption outliers","Cumulative decreases"].map(x=>`<span>✓ ${x}</span>`).join("")}</div></div><div class="detail-section"><h3>Severity rules</h3>${detail("CRITICAL","Conflicting source/duplicate values")}${detail("ERROR","Hard arithmetic or continuity failure")}${detail("REVIEW","Suspicious but potentially explainable difference")}${detail("WARNING","Incomplete/non-critical source field")}${detail("PENDING","Expected activity date not yet present")}${detail("PASS","Check reconciled within tolerance")}</div>`;
+  showModal("🧪 Accuracy Test Plan",html);
+}
+function renderAccuracyTestingLab(){
+  const host=document.getElementById("accuracyTestingLabHost");if(!host)return;
+  const data=accuracyThreeDayChecks(), c=data.checks.reduce((a,x)=>(a[x.status]=(a[x.status]||0)+1,a),{}), total=data.checks.length;
+  host.innerHTML=`<div class="card accuracy-lab-card"><div class="card-title"><div><h2>🧪 3-Day Total Data Accuracy Test</h2><span>Temporary testing • Activity Date only</span></div><button class="accuracy-plan-btn" onclick="openAccuracyTestPlan()">Test Plan</button></div><div class="accuracy-date-banner"><div><small>TEST WINDOW</small><strong>${esc(data.dates.join(" → ")||"No activity dates")}</strong></div><div><small>REPORT DATE</small><strong>${esc(dateOnly(DATA.report_date)||"--")}</strong></div></div><div class="accuracy-rule">🔒 <b>Activity Date is the source of truth.</b> Report Date is treated only as the report/update date.</div><div class="accuracy-summary-grid"><button onclick="openAccuracyTestDetails('CRITICAL')"><small>CRITICAL</small><strong>${c.CRITICAL||0}</strong></button><button onclick="openAccuracyTestDetails('ERROR')"><small>ERROR</small><strong>${c.ERROR||0}</strong></button><button onclick="openAccuracyTestDetails('REVIEW')"><small>REVIEW</small><strong>${c.REVIEW||0}</strong></button><button onclick="openAccuracyTestDetails('WARNING')"><small>WARNING</small><strong>${c.WARNING||0}</strong></button><button onclick="openAccuracyTestDetails('PENDING')"><small>PENDING</small><strong>${c.PENDING||0}</strong></button><button onclick="openAccuracyTestDetails('PASS')"><small>PASS</small><strong>${c.PASS||0}</strong></button></div><button class="accuracy-all-btn" onclick="openAccuracyTestDetails()">View all ${total} validation results →</button><div class="accuracy-note">Testing only. After your review, this complete section can be removed or individual validations can be promoted into the permanent dashboard.</div></div>`;
+}
 
 /* =====================================================
    DATA QUALITY / ACCURACY LAYER
@@ -1636,263 +1826,6 @@ function dqContinuityIssues(){
   });
   return out.filter(x=>!VIEW_DATE||x.currentDate===dateOnly(VIEW_DATE));
 }
-
-/* =====================================================
-   ADVANCED DATA ACCURACY CHECKS
-   Testing-safe: incomplete/missing history is SKIPPED,
-   not reported as a hard mismatch.
-===================================================== */
-function dqRawVal(t){
-  const v=num(t?.for_day??t?.value??t?.quantity??t?.qty);
-  return v===null?null:v;
-}
-function dqTolerance(material){
-  // 0.01 in the material's source unit. This also absorbs floating-point noise.
-  return 0.01;
-}
-function dqDailyRows(material){
-  const map={};
-  transactions(material).forEach(t=>{
-    const d=dateOnly(rowDate(t)); if(!d)return;
-    (map[d]??=[]).push(t);
-  });
-  return map;
-}
-function dqBalanceForDate(rows){
-  let opening=null,closing=null,add=0,out=0,cons=0;
-  rows.forEach(t=>{
-    const ty=tType(t),v=tVal(t);
-    if(ty==="OPENING STOCK") opening=v;
-    else if(ty==="CL. STOCK"||ty==="CLOSING STOCK") closing=v;
-    else if(dqIsConsumption(ty)) cons+=v;
-    else if(ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("GAIN")||ty.includes("TRANSFER FROM")) add+=v;
-    else if(ty.includes("TRANSFER TO")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN TO")) out+=v;
-  });
-  if(opening===null||closing===null)return null;
-  const expected=opening+add-out-cons;
-  return {opening,closing,add,out,cons,expected,diff:closing-expected};
-}
-function dqStockEquationIssues(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    const byDate=dqDailyRows(material);
-    Object.keys(byDate).sort().forEach(date=>{
-      const r=dqBalanceForDate(byDate[date]); if(!r)return;
-      const tol=dqTolerance(material);
-      if(Math.abs(r.diff)>tol)out.push({material,date,...r,tolerance:tol});
-    });
-  });
-  return out.filter(x=>!VIEW_DATE||x.date===dateOnly(VIEW_DATE));
-}
-function dqClosingSnapshotIssues(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    const rows=transactions(material);
-    const dates=rows.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort();
-    const date=dates[dates.length-1]; if(!date)return;
-    const stock=getMaterial(material);
-    const apiClosing=num(stock?.closing);
-    const clRows=rows.filter(t=>dateOnly(rowDate(t))===date&&(tType(t)==="CL. STOCK"||tType(t)==="CLOSING STOCK"));
-    const cl=clRows.length?tVal(clRows[clRows.length-1]):null;
-    if(apiClosing===null||cl===null)return;
-    const diff=apiClosing-cl,tol=dqTolerance(material);
-    if(Math.abs(diff)>tol)out.push({material,date,apiClosing,cl,diff,tolerance:tol});
-  });
-  return out;
-}
-function dqCompleteCalendarDates(dates){
-  const ds=[...new Set((dates||[]).filter(Boolean))].sort();
-  if(ds.length<2)return false;
-  const start=new Date(ds[0]+"T00:00:00"),end=new Date(ds[ds.length-1]+"T00:00:00");
-  const expected=Math.floor((end-start)/86400000)+1;
-  return ds.length===expected;
-}
-function dqMonthlyCumulativeIssues(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    const rows=transactions(material),groups={};
-    rows.forEach(t=>{
-      const d=dateOnly(rowDate(t)),m=monthKey(d); if(!d||!m)return;
-      (groups[m]??=[]).push(t);
-    });
-    Object.entries(groups).forEach(([month,rs])=>{
-      const dates=[...new Set(rs.map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
-      if(!dqCompleteCalendarDates(dates))return;
-      const latest=dates[dates.length-1];
-      const byType={};
-      rs.forEach(t=>{
-        const ty=tType(t),v=num(t.for_day);
-        if(v===null)return;
-        if(dqIsConsumption(ty)||ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("GAIN")||ty.includes("TRANSFER")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN"))byType[ty]=(byType[ty]||0)+v;
-      });
-      const latestRows=rs.filter(t=>dateOnly(rowDate(t))===latest);
-      latestRows.forEach(t=>{
-        const ty=tType(t),cum=num(t.for_month); if(cum===null||!byType[ty]&&byType[ty]!==0)return;
-        if(["OPENING STOCK","CL. STOCK","CLOSING STOCK"].includes(ty))return;
-        const diff=byType[ty]-cum,tol=dqTolerance(material);
-        if(Math.abs(diff)>tol)out.push({material,month,date:latest,transaction:t.transaction||ty,dailySum:byType[ty],monthlyValue:cum,diff,tolerance:tol});
-      });
-    });
-  });
-  // Same transaction may occur multiple times on a day; report each material/type once.
-  const seen=new Set();
-  return out.filter(x=>{const k=[x.material,x.month,x.transaction].join("|");if(seen.has(k))return false;seen.add(k);return true;});
-}
-
-function dqYearCumulativeIssues(){
-  const out=[];
-  const year=String((DATA.report_date||"").slice(0,4)||new Date().getFullYear());
-  getMaterials().forEach(material=>{
-    const rows=transactions(material).filter(t=>dateOnly(rowDate(t))?.startsWith(year));
-    const dates=[...new Set(rows.map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
-    if(!dates.length||dates[0]!==year+"-01-01"||!dqCompleteCalendarDates(dates))return;
-    const sums={};
-    rows.forEach(t=>{
-      const ty=tType(t),v=num(t.for_day); if(v===null)return;
-      if(dqIsConsumption(ty)||ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("GAIN")||ty.includes("TRANSFER")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN"))sums[ty]=(sums[ty]||0)+v;
-    });
-    const latest=dates[dates.length-1];
-    rows.filter(t=>dateOnly(rowDate(t))===latest).forEach(t=>{
-      const ty=tType(t),yv=num(t.for_year); if(yv===null||sums[ty]===undefined)return;
-      if(["OPENING STOCK","CL. STOCK","CLOSING STOCK"].includes(ty))return;
-      const diff=sums[ty]-yv,tol=dqTolerance(material);
-      if(Math.abs(diff)>tol)out.push({material,year,date:latest,transaction:t.transaction||ty,dailySum:sums[ty],yearValue:yv,diff,tolerance:tol});
-    });
-  });
-  const seen=new Set();
-  return out.filter(x=>{const k=[x.material,x.year,x.transaction].join("|");if(seen.has(k))return false;seen.add(k);return true;});
-}
-function dqZeroActivityWarnings(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    const rows=transactions(material),history=rows.filter(t=>dqIsConsumption(tType(t))&&num(t.for_day)!==null);
-    if(history.length<5)return;
-    const latestDate=history.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort().pop(); if(!latestDate)return;
-    const latest=history.filter(t=>dateOnly(rowDate(t))===latestDate);
-    const prior=history.filter(t=>dateOnly(rowDate(t))!==latestDate).map(t=>num(t.for_day)).filter(v=>v!==null&&v>0);
-    if(!prior.length)return;
-    const avg=prior.reduce((a,b)=>a+b,0)/prior.length;
-    if(latest.length&&latest.every(t=>(num(t.for_day)??0)===0)&&avg>0){
-      out.push({material,date:latestDate,avg});
-    }
-  });
-  return out.filter(x=>!VIEW_DATE||x.date===dateOnly(VIEW_DATE));
-}
-
-function dqMonthOpeningIssues(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    const byDate=dqDailyRows(material),dates=Object.keys(byDate).sort();
-    const months=[...new Set(dates.map(monthKey))].sort();
-    for(let i=1;i<months.length;i++){
-      const prevM=months[i-1],curM=months[i];
-      const prevDates=dates.filter(d=>monthKey(d)===prevM),curDates=dates.filter(d=>monthKey(d)===curM);
-      if(!prevDates.length||!curDates.length)continue;
-      const prevDate=prevDates[prevDates.length-1],curDate=curDates[0];
-      const prevEnd=new Date(Number(prevM.slice(0,4)),Number(prevM.slice(5,7)),0).toISOString().slice(0,10);
-      if(prevDate!==prevEnd||curDate.slice(8)!=="01")continue;
-      const prevClose=byDate[prevDate].filter(t=>/^(CL\. STOCK|CLOSING STOCK)$/.test(tType(t))).map(t=>tVal(t)).filter(v=>v!==null).pop();
-      const curOpen=byDate[curDate].filter(t=>tType(t)==="OPENING STOCK").map(t=>tVal(t)).filter(v=>v!==null).pop();
-      if(prevClose===null||prevClose===undefined||curOpen===null||curOpen===undefined)continue;
-      const diff=curOpen-prevClose,tol=dqTolerance(material);
-      if(Math.abs(diff)>tol)out.push({material,previousDate:prevDate,currentDate:curDate,previousClosing:prevClose,currentOpening:curOpen,diff,tolerance:tol});
-    }
-  });
-  return out;
-}
-function dqValueIntegrityIssues(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    transactions(material).forEach((t,index)=>{
-      const d=dateOnly(rowDate(t)),ty=tType(t);
-      ["for_day","for_month","for_year"].forEach(field=>{
-        if(t[field]===undefined||t[field]===null||t[field]==="")return;
-        const raw=num(t[field]);
-        if(raw===null)out.push({kind:"NON-NUMERIC",material,date:d,transaction:ty,field,value:t[field],row:index+1});
-        else if(raw<0 && !Object.is(raw,-0))out.push({kind:"NEGATIVE",material,date:d,transaction:ty,field,value:raw,row:index+1});
-      });
-    });
-  });
-  return out;
-}
-function dqFieldConsistencyIssues(){
-  const out=[];
-  const topDate=dateOnly(DATA.report_date);
-  getMaterials().forEach(material=>{
-    const rows=transactions(material);
-    rows.forEach((t,index)=>{
-      const d=dateOnly(rowDate(t));
-      if(d&&topDate){
-        const delta=Math.abs((new Date(d+"T00:00:00")-new Date(topDate+"T00:00:00"))/86400000);
-        // Source transactions are often UTC 18:30 while report_date is the next local day.
-        if(delta>1)out.push({kind:"REPORT DATE",material,date:d,reportDate:topDate,transaction:tType(t),row:index+1});
-      }
-      if(t.unit){
-        const u=normalize(t.unit),expected=normalize(getMaterial(material)?.unit||"");
-        if(expected&&u&&u!==expected)out.push({kind:"UNIT",material,date:d,transaction:tType(t),row:index+1,unit:t.unit,expected:getMaterial(material)?.unit});
-      }
-      if(t.material&&normalize(t.material)!==normalize(material)){
-        out.push({kind:"MATERIAL NAME",material,date:d,transaction:tType(t),row:index+1,sourceName:t.material});
-      }
-    });
-  });
-  return out;
-}
-function dqMissingDateWarnings(){
-  const out=[];
-  getMaterials().forEach(material=>{
-    const dates=[...new Set(transactions(material).map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
-    for(let i=1;i<dates.length;i++){
-      const prev=new Date(dates[i-1]+"T00:00:00"),cur=new Date(dates[i]+"T00:00:00");
-      const gap=Math.floor((cur-prev)/86400000);
-      if(gap>1){
-        const missing=[];
-        for(let j=1;j<gap;j++){const d=new Date(prev);d.setDate(d.getDate()+j);missing.push(d.toISOString().slice(0,10));}
-        out.push({material,from:dates[i-1],to:dates[i],missing});
-      }
-    }
-  });
-  return out;
-}
-function dqAdvancedCounts(){
-  const eq=dqStockEquationIssues(),cl=dqClosingSnapshotIssues(),mc=dqMonthlyCumulativeIssues(),yc=dqYearCumulativeIssues(),mo=dqMonthOpeningIssues(),vi=dqValueIntegrityIssues(),fc=dqFieldConsistencyIssues(),md=dqMissingDateWarnings(),za=dqZeroActivityWarnings();
-  return {eq,cl,mc,yc,mo,vi,fc,md,za};
-}
-function openDQAdvanced(){
-  const x=dqAdvancedCounts();
-  let html=`<div class="detail-section"><h3>🔬 Advanced Accuracy Checks</h3>
-    ${detail("Stock equation mismatches",x.eq.length)}
-    ${detail("Closing vs CL.STOCK",x.cl.length)}
-    ${detail("Daily → Monthly cumulative",x.mc.length)}
-    ${detail("Monthly → Year cumulative",x.yc.length)}
-    ${detail("Month closing → opening",x.mo.length)}
-    ${detail("Zero-activity warnings",x.za.length)}
-    ${detail("Value integrity errors",x.vi.length)}
-    ${detail("Field consistency errors",x.fc.length)}
-    ${detail("Missing-date warnings",x.md.length)}
-    <div class="small-note">Missing/incomplete history is skipped by reconciliation checks. Missing dates are warnings during testing, not hard errors.</div></div>`;
-  const sections=[
-    ["Stock Equation",x.eq, r=>`${detail("Material",r.material)}${detail("Date",r.date)}${detail("Opening",fmt(r.opening))}${detail("Expected Closing",fmt(r.expected))}${detail("Actual Closing",fmt(r.closing))}${detail("Difference",fmt(r.diff))}`],
-    ["Closing vs CL.STOCK",x.cl, r=>`${detail("Material",r.material)}${detail("Date",r.date)}${detail("API Closing",fmt(r.apiClosing))}${detail("CL.STOCK",fmt(r.cl))}${detail("Difference",fmt(r.diff))}`],
-    ["Daily → Monthly",x.mc, r=>`${detail("Material",r.material)}${detail("Month",r.month)}${detail("Transaction",r.transaction)}${detail("Daily Sum",fmt(r.dailySum))}${detail("for_month",fmt(r.monthlyValue))}${detail("Difference",fmt(r.diff))}`],
-    ["Monthly → Year cumulative",x.yc, r=>`${detail("Material",r.material)}${detail("Year",r.year)}${detail("Transaction",r.transaction)}${detail("Daily Sum",fmt(r.dailySum))}${detail("for_year",fmt(r.yearValue))}${detail("Difference",fmt(r.diff))}`],
-    ["Month Closing → Opening",x.mo, r=>`${detail("Material",r.material)}${detail("Previous Closing",fmt(r.previousClosing))}${detail("Current Opening",fmt(r.currentOpening))}${detail("Difference",fmt(r.diff))}`],
-    ["Value Integrity",x.vi, r=>`${detail("Material",r.material)}${detail("Date",r.date||"--")}${detail("Transaction",r.transaction)}${detail("Field",r.field)}${detail("Value",fmt(r.value))}${detail("Issue",r.kind)}`],
-    ["Field Consistency",x.fc, r=>`${detail("Material",r.material)}${detail("Date",r.date||"--")}${detail("Issue",r.kind)}${detail("Transaction",r.transaction)}${detail("Expected",r.expected||r.reportDate||"--")}${detail("Found",r.unit||r.sourceName||r.date||"--")}`],
-    ["Zero Activity • Warning",x.za, r=>`${detail("Material",r.material)}${detail("Date",r.date)}${detail("Previous average",fmt(r.avg))}${detail("Note","Consumption row is zero while historical activity exists")}`],
-    ["Missing Dates • Warning",x.md, r=>`${detail("Material",r.material)}${detail("From",r.from)}${detail("To",r.to)}${detail("Missing dates",r.missing.join(", "))}`]
-  ];
-  sections.forEach(([title,rows,render])=>{
-    if(!rows.length)return;
-    html+=`<div class="detail-section"><h3>${title} • ${rows.length}</h3>`;
-    rows.slice(0,100).forEach(r=>html+=`<div class="transaction" onclick="closeModal();openMaterialDetails('${jsq(r.material)}')">${render(r)}</div>`);
-    if(rows.length>100)html+=`<div class="small-note">Showing first 100 of ${rows.length}.</div>`;
-    html+="</div>";
-  });
-  if(!x.eq.length&&!x.cl.length&&!x.mc.length&&!x.yc.length&&!x.mo.length&&!x.vi.length&&!x.fc.length&&!x.md.length&&!x.za.length)html+=`<div class="detail-section reconcile-ok"><h3>✓ Advanced Accuracy</h3><div class="empty">No additional issues found in the available complete data.</div></div>`;
-  showModal("Advanced Accuracy",html);
-}
-
 function dqAbnormalItems(){
   // Exact abnormal-consumption rule:
   // Current > Average × 1.5  → High consumption
@@ -1985,20 +1918,17 @@ function openDQCoverage(){
   html+=`</div>`;showModal("Data Coverage",html);
 }
 function dqBuildSummary(){
-  const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage(),adv=dqAdvancedCounts();
-  return `FEED PLANT DATA QUALITY SUMMARY\nDate: ${selectedDateForIntelligence()||DATA.report_date||"Latest"}\n\nDuplicate transaction groups: ${dup.length}\nUnknown transactions: ${unk.length}\nOpening → Closing continuity issues: ${cont.length}\nAbnormal activity: ${ab.length}\nStock equation mismatches: ${adv.eq.length}\nClosing vs CL.STOCK: ${adv.cl.length}\nDaily → Monthly cumulative: ${adv.mc.length}\nMonthly → Year cumulative: ${adv.yc.length}\nMonth closing → opening: ${adv.mo.length}\nValue integrity errors: ${adv.vi.length}\nField consistency errors: ${adv.fc.length}\nZero-activity warnings: ${adv.za.length}\nMissing-date warnings: ${adv.md.length}\n\nCoverage:\n${cov.map(x=>`- ${x.name}: ${x.valid}/${x.total} rows (${x.percent}%)`).join("\n")}`;
+  const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage();
+  return `FEED PLANT DATA QUALITY SUMMARY\nDate: ${selectedDateForIntelligence()||DATA.report_date||"Latest"}\n\nDuplicate transaction groups: ${dup.length}\nUnknown transactions: ${unk.length}\nOpening → Closing continuity issues: ${cont.length}\nAbnormal activity: ${ab.length}\n\nCoverage:\n${cov.map(x=>`- ${x.name}: ${x.valid}/${x.total} rows (${x.percent}%)`).join("\n")}`;
 }
 function badDataIssueCount(){
-  const rec=reconciliationItems(),bad=rec.filter(x=>x.r.status==="MISMATCH");
-  const adv=dqAdvancedCounts();
-  // Warnings (missing dates) are deliberately excluded from the red issue count during testing.
-  return bad.length+abnormalConsumptionItems().length+duplicateTransactionCount()
-    +adv.eq.length+adv.cl.length+adv.mc.length+adv.yc.length+adv.mo.length+adv.vi.length+adv.fc.length;
+  const rec=reconciliationItems(),bad=rec.filter(x=>x.r.status==="MISMATCH"),no=rec.filter(x=>x.r.status==="NO DATA");
+  return bad.length+no.length+abnormalConsumptionItems().length+duplicateTransactionCount();
 }
 function renderDataQualityPanel(){
   const host=document.getElementById("dataQualityPanelHost");if(!host)return;
   const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage();
-  host.innerHTML=`<div class="card control-card" id="dataQualityPanel"><div class="card-title"><h2>🛡 Data Health &amp; Issues</h2><span>Quality • Accuracy • Issues</span></div><div class="control-grid"><button class="control-item" onclick="openDQDuplicates()"><small>🔁 Duplicate Transactions</small><strong>${dup.length}</strong></button><button class="control-item" onclick="openDQUnknown()"><small>❓ Unknown Transactions</small><strong>${unk.length}</strong></button><button class="control-item" onclick="openDQContinuity()"><small>🔗 Opening → Closing</small><strong>${cont.length}</strong></button><button class="control-item" onclick="openDQAbnormal()"><small>⚠ Abnormal Activity</small><strong>${ab.length}</strong></button><button class="control-item" onclick="openDQHistory()"><small>📈 Historical Trend</small><strong>${getMaterials().length}</strong></button><button class="control-item" onclick="openDQCoverage()"><small>🎯 Coverage</small><strong>${cov.filter(x=>x.percent===100).length}/${cov.length}</strong></button><button class="control-item" onclick="openDQAdvanced()"><small>🔬 Advanced Accuracy</small><strong>${(()=>{const a=dqAdvancedCounts();return a.eq.length+a.cl.length+a.mc.length+a.yc.length+a.mo.length+a.vi.length+a.fc.length})()}</strong></button></div><div class="health-strip" onclick="openDataHealth()"><span>⚠ Data Issues</span><b>${badDataIssueCount()}</b> <span>View details →</span></div><div class="small-note">Consumption spelling variations are automatically treated as Consumption; only genuinely unrecognized transaction names are shown as Unknown.</div></div>`;
+  host.innerHTML=`<div class="card control-card" id="dataQualityPanel"><div class="card-title"><h2>🛡 Data Health &amp; Issues</h2><span>Quality • Accuracy • Issues</span></div><div class="control-grid"><button class="control-item" onclick="openDQDuplicates()"><small>🔁 Duplicate Transactions</small><strong>${dup.length}</strong></button><button class="control-item" onclick="openDQUnknown()"><small>❓ Unknown Transactions</small><strong>${unk.length}</strong></button><button class="control-item" onclick="openDQContinuity()"><small>🔗 Opening → Closing</small><strong>${cont.length}</strong></button><button class="control-item" onclick="openDQAbnormal()"><small>⚠ Abnormal Activity</small><strong>${ab.length}</strong></button><button class="control-item" onclick="openDQHistory()"><small>📈 Historical Trend</small><strong>${getMaterials().length}</strong></button><button class="control-item" onclick="openDQCoverage()"><small>🎯 Coverage</small><strong>${cov.filter(x=>x.percent===100).length}/${cov.length}</strong></button></div><div class="health-strip" onclick="openDataHealth()"><span>⚠ Data Issues</span><b>${badDataIssueCount()}</b> <span>View details →</span></div><div class="small-note">Consumption spelling variations are automatically treated as Consumption; only genuinely unrecognized transaction names are shown as Unknown.</div></div>`;
 }
 function ensureDataQualityHost(){
   const premixCard=document.getElementById("premixTransferCard");
@@ -2010,6 +1940,13 @@ function ensureDataQualityHost(){
     premixCard.parentNode.insertBefore(host,premixCard.nextSibling);
   }
   renderDataQualityPanel();
+  let lab=document.getElementById("accuracyTestingLabHost");
+  if(!lab){
+    lab=document.createElement("div");
+    lab.id="accuracyTestingLabHost";
+    host.parentNode.insertBefore(lab,host.nextSibling);
+  }
+  renderAccuracyTestingLab();
 }
 const __dqBaseRenderControlCenter=renderControlCenter;
 renderControlCenter=function(){__dqBaseRenderControlCenter();ensureDataQualityHost()};
