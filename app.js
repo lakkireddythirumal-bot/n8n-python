@@ -2308,6 +2308,36 @@ async function copyReportWhatsApp(section){
    Uses the dashboard data already loaded in the browser.
    No API/source changes and no external credentials required.
 ===================================================== */
+function plantAIJSON(){
+  const m=plantAIMetrics();
+  const safe=(v)=>v==null?null:Number.isFinite(Number(v))?Number(v):v;
+  const materials=m.stockRows.slice(0,200).map(x=>({
+    name:x.material||x.name||'', closing:safe(x.closing), unit:x.unit||'MT', avgDay:safe(x.avg), coverDays:safe(x.cover), status:x.status||'OK'
+  }));
+  const attention=m.attention.slice(0,100).map(x=>({level:x.level||'info',text:x.text||'',reason:x.reason||'',count:safe(x.count)||0}));
+  const productionRows=m.prodRows.slice(0,100).map(r=>({
+    product:r.product||r.Product||r.name||'', output:safe(r.output_percentage??r.outputPercent??r.output_percentage_value),
+    actual:safe(r.actual??r.actualOutput??r.output), target:safe(r.target??r.targetOutput)
+  }));
+  const productionAvg=m.avgOutput==null?null:Number(m.avgOutput);
+  return {
+    date:m.date,
+    summary:{productionMT:safe(m.production),dispatchMT:safe(m.dispatch),dispatchProductionPct:m.production>0?safe(m.dispatch/m.production*100):null,averageOutputPct:productionAvg},
+    attention,
+    rawMaterials:{totalStock:safe(m.stockTotal),items:materials},
+    production:{records:productionRows,count:m.products||0},
+    flags:{critical:m.critical,warning:m.warning,lowStock:materials.filter(x=>x.status!=='OK').length},
+    generatedAt:new Date().toISOString()
+  };
+}
+function plantAIContext(intent){
+  const d=plantAIJSON();
+  if(intent==='materials')return {date:d.date,rawMaterials:d.rawMaterials,attention:d.attention.filter(x=>/stock|reorder|material|premix/i.test(x.text+' '+x.reason))};
+  if(intent==='production')return {date:d.date,summary:d.summary,production:d.production,attention:d.attention.filter(x=>/production|output|pellet|downtime|machine/i.test(x.text+' '+x.reason)),rawMaterials:{items:d.rawMaterials.items.filter(x=>x.status!=='OK')}};
+  if(intent==='consumption')return {date:d.date,rawMaterials:d.rawMaterials,attention:d.attention.filter(x=>/consumption|usage|variance/i.test(x.text+' '+x.reason)),summary:d.summary};
+  if(intent==='dispatch')return {date:d.date,summary:d.summary,attention:d.attention.filter(x=>/dispatch|stock/i.test(x.text+' '+x.reason))};
+  return d;
+}
 function plantAIMetrics(){
   const date=selectedDateForIntelligence()||dateOnly(DATA.report_date)||"Latest";
   const attention=attentionSummaryItems().filter(x=>x.level!=="clear");
@@ -2325,92 +2355,115 @@ function plantAIMetrics(){
   const products=feedRows.length;
   return {date,attention,critical,warning,stockRows,stockTotal,lowStock,prodRows,avgOutput,feedRows,production,dispatch,products};
 }
+function plantAIIntent(q){
+  const s=plantAINormalizeQuestion(q);
+  if(!s)return {intent:'status',confidence:0.5};
+  const rules=[
+    ['materials',/(raw material|\brm\b|stock|inventory|maize|rice|soy|premix|material|reorder|cover|shortage|closing stock)/],
+    ['production',/(production|output|pellet|tonnage|tph|produce|manufactur|yield|efficiency|machine output)/],
+    ['consumption',/(consumption|consume|usage|used|variance|abnormal consumption|actual vs standard)/],
+    ['dispatch',/(dispatch|sale|sales|delivery|outward|despatch)/],
+    ['maintenance',/(maintenance|breakdown|motor|vfd|equipment|repair|downtime|trip|machine fault)/],
+    ['quality',/(quality|qms|rejection|bag damage|damage|complaint)/],
+    ['status',/(attention|alert|warning|critical|problem|issue|today|risk|urgent|health|condition|status|overall|plant|what should i|what needs)/]
+  ];
+  let best={intent:'status',score:0};
+  rules.forEach(([intent,re])=>{const hits=(s.match(re)||[]).length;if(hits>best.score)best={intent,score:hits};});
+  return {intent:best.intent,confidence:Math.min(.99,.55+best.score*.14)};
+}
 function plantAIAnswer(kind){
   const m=plantAIMetrics();
   let title="Plant status", intro="", findings=[], actions=[];
   if(kind==="status"){
     title="What needs my attention today?";
     intro=m.critical?`There are ${m.critical} critical item${m.critical===1?"":"s"} requiring attention.`:m.warning?`There are ${m.warning} warning item${m.warning===1?"":"s"} to review.`:"No active critical or warning conditions were detected in the monitored dashboard data.";
-    m.attention.slice(0,5).forEach(x=>findings.push({level:x.level,title:x.text,body:x.reason}));
+    m.attention.slice(0,7).forEach(x=>findings.push({level:x.level,title:x.text,body:x.reason}));
     if(m.lowStock.length)actions.push("Review the lowest stock-cover materials first.");
     if(m.critical)actions.push("Open Attention Required and clear critical items before lower-priority checks.");
   }else if(kind==="production"){
-    title="Why might production be under pressure?";
+    title="Production analysis";
     if(m.production>0)findings.push({level:"info",title:`Current production: ${fmt(m.production)} MT`,body:`${m.products||0} feed product record(s) are available for ${m.date}.`});
     if(m.avgOutput!==null)findings.push({level:m.avgOutput<95?"warning":"good",title:`Average recorded output: ${fmt(m.avgOutput)}%`,body:m.avgOutput<95?"Output is below the 95% monitoring threshold used by Attention Required.":"Average output is at or above the monitored 95% threshold."});
     const prodAlert=m.attention.find(x=>/production output/i.test(x.text));
     if(prodAlert)findings.push({level:prodAlert.level,title:prodAlert.text,body:prodAlert.reason});
-    if(m.dispatch>0&&m.production>0){const ratio=m.dispatch/m.production*100;findings.push({level:ratio>100?"warning":"info",title:`Dispatch / production: ${fmt(ratio)}%`,body:ratio>100?"Dispatch exceeds today's recorded production; verify dates and opening stock/previous stock movement.":"Dispatch is within today's recorded production volume."});}
-    actions=["Check the affected production records from Attention Required.","If output is low, review machine load, downtime, steam/feed rate and raw-material availability before changing settings."];
+    if(m.dispatch>0&&m.production>0){const ratio=m.dispatch/m.production*100;findings.push({level:ratio>100?"warning":"info",title:`Dispatch / production: ${fmt(ratio)}%`,body:ratio>100?"Dispatch exceeds today's recorded production; verify dates and opening/previous stock movement.":"Dispatch is within today's recorded production volume."});}
+    actions=["Check affected production records and Attention Required alerts.","If output is low, review machine load, downtime, steam/feed rate and raw-material availability before changing settings."];
   }else if(kind==="materials"){
-    title="Which raw materials need attention?";
-    if(!m.lowStock.length) findings.push({level:"good",title:"No low-stock materials found",body:"The current stock coverage calculations do not show a material requiring attention."});
+    title="Raw-material analysis";
+    if(!m.lowStock.length)findings.push({level:"good",title:"No low-stock materials found",body:"Current stock coverage does not show a material requiring attention."});
     m.lowStock.slice(0,8).forEach(x=>findings.push({level:x.status==="REORDER"?"critical":"warning",title:x.material,body:`Closing ${fmt(x.closing)} ${x.unit||"MT"} • Cover ${x.cover==null?"--":fmt(x.cover)+" days"} • Avg ${fmt(x.avg||0)} ${x.unit||"MT"}/day`}));
-    actions=["Open the material detail to review recent consumption and transactions.","Confirm purchase/transfer timing before stock reaches the reorder level."];
+    actions=["Review the lowest-cover material first.","Confirm purchase/transfer timing before stock reaches the reorder level."];
   }else if(kind==="consumption"){
-    title="Is consumption behaving normally?";
+    title="Consumption analysis";
     const abnormal=m.attention.find(x=>/abnormal consumption/i.test(x.text));
     if(abnormal)findings.push({level:"critical",title:abnormal.text,body:abnormal.reason});
-    else findings.push({level:"good",title:"No abnormal-consumption alert",body:"The current monitored consumption data is within the configured alert range."});
+    else findings.push({level:"good",title:"No abnormal-consumption alert",body:"Current monitored consumption is within the configured alert range."});
     const rmTotal=monthlyRMConsumption(MIX_MONTH||mixDefaultMonth()).reduce((a,r)=>a+r.value,0);
     findings.push({level:"info",title:`Monthly RM consumption: ${fmt(rmTotal)} MT`,body:`Based on the currently selected month (${monthLabel(MIX_MONTH||mixDefaultMonth())}).`});
-    actions=["If consumption is abnormal, compare the affected material with production output and the transaction history for the same dates."];
+    actions=["Compare affected material consumption with production output and transaction history for the same dates."];
+  }else if(kind==="dispatch"){
+    title="Dispatch analysis";
+    if(m.dispatch>0)findings.push({level:m.production>0&&m.dispatch>m.production?"warning":"info",title:`Current dispatch: ${fmt(m.dispatch)} MT`,body:`${m.products||0} feed product record(s) are available for ${m.date}.`});
+    if(m.production>0){const ratio=m.dispatch/m.production*100;findings.push({level:ratio>100?"warning":"good",title:`Dispatch / production: ${fmt(ratio)}%`,body:ratio>100?"Dispatch exceeds today's recorded production; verify opening stock, previous stock and date alignment.":"Dispatch is within today's recorded production volume."});}
+    actions=["Review dispatch and feed closing details if the quantity looks unusual."];
+  }else if(kind==="maintenance"){
+    title="Maintenance signals";
+    const items=m.attention.filter(x=>/maintenance|breakdown|motor|vfd|equipment|downtime|machine/i.test(x.text+' '+x.reason));
+    if(items.length)items.slice(0,6).forEach(x=>findings.push({level:x.level,title:x.text,body:x.reason}));
+    else findings.push({level:"good",title:"No maintenance alert detected",body:"The current Attention Required data has no matching maintenance/equipment alert."});
+    actions=["Verify machine condition, downtime and recent trips for any output-related anomaly."];
+  }else if(kind==="quality"){
+    title="Quality signals";
+    const items=m.attention.filter(x=>/quality|damage|rejection|complaint/i.test(x.text+' '+x.reason));
+    if(items.length)items.slice(0,6).forEach(x=>findings.push({level:x.level,title:x.text,body:x.reason}));
+    else findings.push({level:"good",title:"No quality alert detected",body:"No matching quality-related alert is present in the loaded dashboard data."});
+    actions=["Review the underlying quality record before taking corrective action."];
   }
-  if(!findings.length)findings.push({level:"info",title:"Not enough data for this question",body:"The dashboard has no matching records for the selected date."});
-  return {title,intro,findings,actions,date:m.date};
+  if(!findings.length)findings.push({level:"info",title:"Not enough matching data",body:"The dashboard has no matching records for this question and selected date."});
+  return {title,intro,findings,actions,date:m.date,context:plantAIContext(kind)};
 }
-function renderPlantAI(kind="status"){
-  const box=document.getElementById("plantAIAnswer");if(!box)return;
-  const a=plantAIAnswer(kind);
-  box.innerHTML=`<div class="plant-ai-answer"><h4>${esc(a.title)}</h4><p>${esc(a.intro)}</p>${a.findings.map(f=>`<div class="plant-ai-finding"><span class="ai-dot ${f.level}"></span><div><strong>${esc(f.title)}</strong><p>${esc(f.body)}</p></div></div>`).join("")}${a.actions.length?`<div class="plant-ai-answer" style="background:#f7f9fc;margin-top:10px"><strong style="font-size:11px">Suggested checks</strong>${a.actions.map(x=>`<p>• ${esc(x)}</p>`).join("")}</div>`:""}<div class="plant-ai-note">Analysis date: ${esc(a.date)} • Based on data already loaded in this dashboard. Always verify operational conditions before taking plant action.</div></div>`;
-}
-function plantAINormalizeQuestion(q){
-  return String(q||'').toLowerCase().replace(/[^a-z0-9%\.\s-]/g,' ').replace(/\s+/g,' ').trim();
-}
-function plantAIIntent(q){
-  const s=plantAINormalizeQuestion(q);
-  if(!s)return 'status';
-  if(/production|output|pellet|tonnage|tph|produce|manufactur/.test(s))return 'production';
-  if(/raw material|rm |stock|inventory|maize|rice|soy|premix|material|reorder|cover|shortage/.test(s))return 'materials';
-  if(/consumption|consume|usage|used|variance|abnormal/.test(s))return 'consumption';
-  if(/dispatch|sale|sales|delivery|outward/.test(s))return 'dispatch';
-  if(/attention|alert|warning|critical|problem|issue|today|risk|urgent/.test(s))return 'status';
-  if(/health|condition|status|how is|how are|overall|plant/.test(s))return 'status';
-  return 'status';
+function plantAIExplain(question,a){
+  const q=plantAINormalizeQuestion(question);
+  if(/why|reason|cause|because|problem|issue/.test(q)){
+    const negatives=a.findings.filter(f=>['critical','warning'].includes(f.level));
+    if(negatives.length)return `Main signal: ${negatives.slice(0,3).map(f=>f.title).join('; ')}. These are indicators, not proof of root cause; verify the underlying operational records.`;
+    return 'No strong negative signal was detected in the currently loaded data, so a specific root cause cannot be established from the dashboard alone.';
+  }
+  if(/compare|vs|versus|trend|yesterday|average/.test(q))return 'Comparison is based only on the periods/records currently loaded in the dashboard; verify the selected date range before using it for a management decision.';
+  return '';
 }
 function plantAIAnswerNatural(question){
   const q=String(question||'').trim();
-  const intent=plantAIIntent(q);
-  const base=plantAIAnswer(intent);
-  if(intent==='dispatch'){
-    const m=plantAIMetrics();
-    const findings=[];
-    if(m.dispatch>0) findings.push({level:m.production>0&&m.dispatch>m.production?'warning':'info',title:`Current dispatch: ${fmt(m.dispatch)} MT`,body:`${m.products||0} feed product record(s) are available for ${m.date}.`});
-    if(m.production>0){const ratio=m.dispatch/m.production*100;findings.push({level:ratio>100?'warning':'good',title:`Dispatch / production: ${fmt(ratio)}%`,body:ratio>100?'Dispatch exceeds today\'s recorded production; verify opening stock, previous stock and date alignment.':'Dispatch is within today\'s recorded production volume.'});}
-    return {title:'Dispatch analysis',intro:q?`I analysed the loaded dashboard data for: “${q}”`:'Dispatch status',findings:findings.length?findings:[{level:'info',title:'No dispatch data available',body:'There is no matching dispatch record for the selected date.'}],actions:['Review dispatch and feed closing details if the quantity looks unusual.'],date:m.date};
-  }
-  base.intro=q?`I analysed the loaded dashboard data for: “${q}”. ${base.intro}`:base.intro;
+  const route=plantAIIntent(q);
+  const base=plantAIAnswer(route.intent);
+  const explanation=plantAIExplain(q,base);
+  base.intro=(q?`I analysed the loaded plant data for: “${q}”. `:'')+base.intro+(explanation?' '+explanation:'');
+  base.confidence=route.confidence;
+  base.intent=route.intent;
+  base.context=plantAIContext(route.intent);
   return base;
 }
-function askPlantAI(){
-  const input=document.getElementById('plantAIQuestion');
-  const q=input?input.value.trim():'';
-  if(!q){showToast('Type a question first'); if(input)input.focus(); return;}
-  renderPlantAIQuestion(q);
+function plantAIConfidenceLabel(c){return c>=.82?'High':c>=.68?'Medium':'Low';}
+function renderPlantAI(kind="status"){
+  const box=document.getElementById("plantAIAnswer");if(!box)return;
+  const a=plantAIAnswer(kind);
+  box.innerHTML=`<div class="plant-ai-answer"><div class="plant-ai-meta"><span>Confidence: ${plantAIConfidenceLabel(.9)}</span><span>Source: dashboard data</span></div><h4>${esc(a.title)}</h4><p>${esc(a.intro)}</p>${a.findings.map(f=>`<div class="plant-ai-finding"><span class="ai-dot ${f.level}"></span><div><strong>${esc(f.title)}</strong><p>${esc(f.body)}</p></div></div>`).join("")}${a.actions.length?`<div class="plant-ai-answer" style="background:#f7f9fc;margin-top:10px"><strong style="font-size:11px">Suggested checks</strong>${a.actions.map(x=>`<p>• ${esc(x)}</p>`).join("")}</div>`:""}<div class="plant-ai-note">Analysis date: ${esc(a.date)} • Verify operational conditions before taking plant action.</div></div>`;
 }
+function plantAINormalizeQuestion(q){return String(q||'').toLowerCase().replace(/[^a-z0-9%\.\s-]/g,' ').replace(/\s+/g,' ').trim();}
+function askPlantAI(){const input=document.getElementById('plantAIQuestion');const q=input?input.value.trim():'';if(!q){showToast('Type a question first');if(input)input.focus();return;}renderPlantAIQuestion(q);}
 function renderPlantAIQuestion(question){
   const box=document.getElementById('plantAIAnswer');if(!box)return;
   box.innerHTML='<div class="plant-ai-thinking"><span class="plant-ai-spinner"></span> Analysing plant data…</div>';
   setTimeout(()=>{
     const a=plantAIAnswerNatural(question);
-    box.innerHTML=`<div class="plant-ai-answer"><h4>${esc(a.title)}</h4><p>${esc(a.intro)}</p>${a.findings.map(f=>`<div class="plant-ai-finding"><span class="ai-dot ${f.level}"></span><div><strong>${esc(f.title)}</strong><p>${esc(f.body)}</p></div></div>`).join('')}${a.actions.length?`<div class="plant-ai-answer" style="background:#f7f9fc;margin-top:10px"><strong style="font-size:11px">Suggested checks</strong>${a.actions.map(x=>`<p>• ${esc(x)}</p>`).join('')}</div>`:''}<div class="plant-ai-note">Analysis date: ${esc(a.date)} • Uses data already loaded in this dashboard. Verify operational conditions before taking plant action.</div></div>`;
-  },120);
+    const contextSize=JSON.stringify(a.context||{}).length;
+    box.innerHTML=`<div class="plant-ai-answer"><div class="plant-ai-meta"><span>Confidence: ${plantAIConfidenceLabel(a.confidence)}</span><span>Focus: ${esc(a.intent)}</span><span>Data used: ${contextSize>0?Math.round(contextSize/1024)+' KB':'--'}</span></div><h4>${esc(a.title)}</h4><p>${esc(a.intro)}</p>${a.findings.map(f=>`<div class="plant-ai-finding"><span class="ai-dot ${f.level}"></span><div><strong>${esc(f.title)}</strong><p>${esc(f.body)}</p></div></div>`).join('')}${a.actions.length?`<div class="plant-ai-answer" style="background:#f7f9fc;margin-top:10px"><strong style="font-size:11px">Suggested checks</strong>${a.actions.map(x=>`<p>• ${esc(x)}</p>`).join('')}</div>`:''}<details class="plant-ai-data"><summary>View AI data context</summary><pre>${esc(JSON.stringify(a.context,null,2))}</pre></details><div class="plant-ai-note">Analysis date: ${esc(a.date)} • Uses only relevant data already loaded in this dashboard. Verify operational conditions before taking plant action.</div></div>`;
+  },80);
 }
 function setPlantAIQuestion(q){const input=document.getElementById('plantAIQuestion');if(input){input.value=q;input.focus();}}
 function openPlantAI(){
-  const html=`<div class="plant-ai-hero"><div class="plant-ai-status"><span></span>Plant Intelligence</div><h3>🤖 Plant AI</h3><p>Ask the dashboard what needs attention. Answers use the current plant data, alerts, stock coverage and production records already loaded.</p><div class="plant-ai-ask"><input id="plantAIQuestion" type="text" autocomplete="off" placeholder="Ask Plant AI… e.g. Why is production low today?" onkeydown="if(event.key==='Enter')askPlantAI()"><button onclick="askPlantAI()">Ask</button></div><div class="plant-ai-suggestions"><span>Try:</span><button onclick="setPlantAIQuestion('Why is production low today?')">Why is production low?</button><button onclick="setPlantAIQuestion('Which raw material needs attention?')">Which RM needs attention?</button><button onclick="setPlantAIQuestion('Is consumption normal?')">Is consumption normal?</button></div><div class="plant-ai-actions"><button class="plant-ai-action" onclick="renderPlantAI('status')">What needs attention today?<small>Critical & warning conditions</small></button><button class="plant-ai-action" onclick="renderPlantAI('production')">Why is production under pressure?<small>Output & dispatch signals</small></button><button class="plant-ai-action" onclick="renderPlantAI('materials')">Which RM needs attention?<small>Stock cover & reorder</small></button><button class="plant-ai-action" onclick="renderPlantAI('consumption')">Is consumption normal?<small>Consumption anomalies</small></button></div></div><div id="plantAIAnswer"></div>`;
-  showModal("🤖 Plant AI",html);
-  renderPlantAI("status");
+  const html=`<div class="plant-ai-hero"><div class="plant-ai-status"><span></span>Plant Intelligence Engine</div><h3>🤖 Plant AI</h3><p>Ask about production, raw materials, consumption, dispatch, maintenance, quality or plant status. The engine builds a focused JSON context and analyses only relevant loaded data.</p><div class="plant-ai-ask"><input id="plantAIQuestion" type="text" autocomplete="off" placeholder="Ask anything… e.g. Why is production low today?" onkeydown="if(event.key==='Enter')askPlantAI()"><button onclick="askPlantAI()">Ask</button></div><div class="plant-ai-suggestions"><span>Try:</span><button onclick="setPlantAIQuestion('Why is production low today?')">Why is production low?</button><button onclick="setPlantAIQuestion('Which raw material needs attention?')">Which RM needs attention?</button><button onclick="setPlantAIQuestion('Is consumption normal?')">Is consumption normal?</button><button onclick="setPlantAIQuestion('What maintenance issues need attention?')">Maintenance issues?</button></div><div class="plant-ai-actions"><button class="plant-ai-action" onclick="renderPlantAI('status')">What needs attention today?<small>Critical & warning conditions</small></button><button class="plant-ai-action" onclick="renderPlantAI('production')">Analyse production<small>Output, dispatch & signals</small></button><button class="plant-ai-action" onclick="renderPlantAI('materials')">Analyse raw materials<small>Stock cover & reorder</small></button><button class="plant-ai-action" onclick="renderPlantAI('consumption')">Analyse consumption<small>Usage & anomaly signals</small></button><button class="plant-ai-action" onclick="renderPlantAI('maintenance')">Analyse maintenance<small>Equipment & downtime alerts</small></button><button class="plant-ai-action" onclick="renderPlantAI('quality')">Analyse quality<small>Damage & quality alerts</small></button></div></div><div id="plantAIAnswer"></div>`;
+  showModal("🤖 Plant AI",html);renderPlantAI("status");
 }
 
 /* =====================================================
