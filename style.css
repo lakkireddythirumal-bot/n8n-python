@@ -1234,23 +1234,3 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   .quick-grid,.pp-grid,.feed-total-grid,.mini-grid{gap:6px}
   .quick strong{font-size:13px}
 }
-
-/* System dark mode. Explicit app surfaces are kept visually consistent. */
-@media(prefers-color-scheme:dark){
-  :root{
-    --ui-bg:#0f141b;--ui-surface:#151b23;--ui-surface-soft:#1b222c;
-    --ui-border:#29313c;--ui-border-strong:#35404d;--ui-text:#edf2f7;
-    --ui-muted:#a7b0bc;--ui-subtle:#8e99a7;--ui-shadow:0 3px 18px rgba(0,0,0,.22)
-  }
-  body{background:var(--ui-bg);color:var(--ui-text)}
-  .card,.attention-card,.modal-box,.notify-btn,.plant,.refresh,.install,.header-tool,.close,.report-view-panel,.transaction{background:var(--ui-surface);color:var(--ui-text)}
-  .quick,.mini,.feed-total,.pp-item,.detail-section,.trend-card,.stock-head,.mix-panel,.transaction-value{background:var(--ui-surface-soft);color:var(--ui-text)}
-  .stock-head,.stock-row,.feed-row,.production-row,.premix-total,.detail-row,.transaction{border-color:var(--ui-border)}
-  .section-tabs button:not(.active),select,.mix-month-select,.report-view-btn,.report-close-btn{background:var(--ui-surface-soft)!important;color:var(--ui-text)!important;border-color:var(--ui-border-strong)!important}
-  .header p,.card-title span,.quick p,.mini p,.feed-total p,.pp-item p,.prod-meta,.row-right small,.small-note,.empty,.attention-meta,.mix-panel-head small,.monthly-mix-note{color:var(--ui-muted)}
-  .bottom-nav{background:rgba(21,27,35,.97);border-color:var(--ui-border)}
-  .loading-state{background:linear-gradient(90deg,#1a212a 25%,#242d38 37%,#1a212a 63%);background-size:400% 100%}
-  .loading-state::after{background:rgba(255,255,255,.08)}
-  .error-box{background:#2a1719;color:#ffb4b4;border-color:#553033}
-  .attention-card.has-critical{border-color:#5a3030}.attention-card.has-warning{border-color:#554b2d}
-}
