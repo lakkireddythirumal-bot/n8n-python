@@ -1040,6 +1040,17 @@ function renderAlerts(){
     const damage=num(r.damage)||0;
     if(damage>0)items.push({title:r.product||"PP Bags",msg:`PP bag damage recorded: ${fmt(damage)}`,type:"warning",icon:"👜"});
   });
+  // Advanced accuracy alerts: one alert per category to avoid flooding the notification panel.
+  const adv=dqAdvancedCounts();
+  if(adv.eq.length)items.push({title:"Data Accuracy",msg:`${adv.eq.length} stock equation mismatch${adv.eq.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.cl.length)items.push({title:"Data Accuracy",msg:`${adv.cl.length} closing vs CL.STOCK mismatch${adv.cl.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.mc.length)items.push({title:"Data Accuracy",msg:`${adv.mc.length} daily-to-month cumulative mismatch${adv.mc.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.yc.length)items.push({title:"Data Accuracy",msg:`${adv.yc.length} monthly-to-year cumulative mismatch${adv.yc.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.mo.length)items.push({title:"Data Accuracy",msg:`${adv.mo.length} month opening/closing mismatch${adv.mo.length>1?"es":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.vi.length)items.push({title:"Data Accuracy",msg:`${adv.vi.length} invalid/negative value${adv.vi.length>1?"s":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.fc.length)items.push({title:"Data Accuracy",msg:`${adv.fc.length} field consistency issue${adv.fc.length>1?"s":""} detected`,type:"critical",icon:"🔬"});
+  if(adv.za.length)items.push({title:"Data Quality",msg:`${adv.za.length} zero-activity warning${adv.za.length>1?"s":""} detected`,type:"warning",icon:"🟡"});
+  if(adv.md.length)items.push({title:"Data Quality",msg:`${adv.md.length} missing-date gap${adv.md.length>1?"s":""} found — review only`,type:"warning",icon:"📅"});
   ALERTS=items.filter(a=>!DISMISSED_ALERTS.has(alertKey(a)));
   const badge=document.getElementById("notifyBadge");
   if(badge){badge.textContent=ALERTS.length>99?"99+":String(ALERTS.length);badge.classList.toggle("hidden",ALERTS.length===0)}
@@ -1625,6 +1636,263 @@ function dqContinuityIssues(){
   });
   return out.filter(x=>!VIEW_DATE||x.currentDate===dateOnly(VIEW_DATE));
 }
+
+/* =====================================================
+   ADVANCED DATA ACCURACY CHECKS
+   Testing-safe: incomplete/missing history is SKIPPED,
+   not reported as a hard mismatch.
+===================================================== */
+function dqRawVal(t){
+  const v=num(t?.for_day??t?.value??t?.quantity??t?.qty);
+  return v===null?null:v;
+}
+function dqTolerance(material){
+  // 0.01 in the material's source unit. This also absorbs floating-point noise.
+  return 0.01;
+}
+function dqDailyRows(material){
+  const map={};
+  transactions(material).forEach(t=>{
+    const d=dateOnly(rowDate(t)); if(!d)return;
+    (map[d]??=[]).push(t);
+  });
+  return map;
+}
+function dqBalanceForDate(rows){
+  let opening=null,closing=null,add=0,out=0,cons=0;
+  rows.forEach(t=>{
+    const ty=tType(t),v=tVal(t);
+    if(ty==="OPENING STOCK") opening=v;
+    else if(ty==="CL. STOCK"||ty==="CLOSING STOCK") closing=v;
+    else if(dqIsConsumption(ty)) cons+=v;
+    else if(ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("GAIN")||ty.includes("TRANSFER FROM")) add+=v;
+    else if(ty.includes("TRANSFER TO")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN TO")) out+=v;
+  });
+  if(opening===null||closing===null)return null;
+  const expected=opening+add-out-cons;
+  return {opening,closing,add,out,cons,expected,diff:closing-expected};
+}
+function dqStockEquationIssues(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    const byDate=dqDailyRows(material);
+    Object.keys(byDate).sort().forEach(date=>{
+      const r=dqBalanceForDate(byDate[date]); if(!r)return;
+      const tol=dqTolerance(material);
+      if(Math.abs(r.diff)>tol)out.push({material,date,...r,tolerance:tol});
+    });
+  });
+  return out.filter(x=>!VIEW_DATE||x.date===dateOnly(VIEW_DATE));
+}
+function dqClosingSnapshotIssues(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    const rows=transactions(material);
+    const dates=rows.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort();
+    const date=dates[dates.length-1]; if(!date)return;
+    const stock=getMaterial(material);
+    const apiClosing=num(stock?.closing);
+    const clRows=rows.filter(t=>dateOnly(rowDate(t))===date&&(tType(t)==="CL. STOCK"||tType(t)==="CLOSING STOCK"));
+    const cl=clRows.length?tVal(clRows[clRows.length-1]):null;
+    if(apiClosing===null||cl===null)return;
+    const diff=apiClosing-cl,tol=dqTolerance(material);
+    if(Math.abs(diff)>tol)out.push({material,date,apiClosing,cl,diff,tolerance:tol});
+  });
+  return out;
+}
+function dqCompleteCalendarDates(dates){
+  const ds=[...new Set((dates||[]).filter(Boolean))].sort();
+  if(ds.length<2)return false;
+  const start=new Date(ds[0]+"T00:00:00"),end=new Date(ds[ds.length-1]+"T00:00:00");
+  const expected=Math.floor((end-start)/86400000)+1;
+  return ds.length===expected;
+}
+function dqMonthlyCumulativeIssues(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    const rows=transactions(material),groups={};
+    rows.forEach(t=>{
+      const d=dateOnly(rowDate(t)),m=monthKey(d); if(!d||!m)return;
+      (groups[m]??=[]).push(t);
+    });
+    Object.entries(groups).forEach(([month,rs])=>{
+      const dates=[...new Set(rs.map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
+      if(!dqCompleteCalendarDates(dates))return;
+      const latest=dates[dates.length-1];
+      const byType={};
+      rs.forEach(t=>{
+        const ty=tType(t),v=num(t.for_day);
+        if(v===null)return;
+        if(dqIsConsumption(ty)||ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("GAIN")||ty.includes("TRANSFER")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN"))byType[ty]=(byType[ty]||0)+v;
+      });
+      const latestRows=rs.filter(t=>dateOnly(rowDate(t))===latest);
+      latestRows.forEach(t=>{
+        const ty=tType(t),cum=num(t.for_month); if(cum===null||!byType[ty]&&byType[ty]!==0)return;
+        if(["OPENING STOCK","CL. STOCK","CLOSING STOCK"].includes(ty))return;
+        const diff=byType[ty]-cum,tol=dqTolerance(material);
+        if(Math.abs(diff)>tol)out.push({material,month,date:latest,transaction:t.transaction||ty,dailySum:byType[ty],monthlyValue:cum,diff,tolerance:tol});
+      });
+    });
+  });
+  // Same transaction may occur multiple times on a day; report each material/type once.
+  const seen=new Set();
+  return out.filter(x=>{const k=[x.material,x.month,x.transaction].join("|");if(seen.has(k))return false;seen.add(k);return true;});
+}
+
+function dqYearCumulativeIssues(){
+  const out=[];
+  const year=String((DATA.report_date||"").slice(0,4)||new Date().getFullYear());
+  getMaterials().forEach(material=>{
+    const rows=transactions(material).filter(t=>dateOnly(rowDate(t))?.startsWith(year));
+    const dates=[...new Set(rows.map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
+    if(!dates.length||dates[0]!==year+"-01-01"||!dqCompleteCalendarDates(dates))return;
+    const sums={};
+    rows.forEach(t=>{
+      const ty=tType(t),v=num(t.for_day); if(v===null)return;
+      if(dqIsConsumption(ty)||ty==="PURCHASE"||ty==="RECEIVED"||ty.includes("GAIN")||ty.includes("TRANSFER")||ty.includes("SALE")||ty.includes("SHORTAGE")||ty.includes("DAMAGE")||ty.includes("ISSUE")||ty.includes("RETURN"))sums[ty]=(sums[ty]||0)+v;
+    });
+    const latest=dates[dates.length-1];
+    rows.filter(t=>dateOnly(rowDate(t))===latest).forEach(t=>{
+      const ty=tType(t),yv=num(t.for_year); if(yv===null||sums[ty]===undefined)return;
+      if(["OPENING STOCK","CL. STOCK","CLOSING STOCK"].includes(ty))return;
+      const diff=sums[ty]-yv,tol=dqTolerance(material);
+      if(Math.abs(diff)>tol)out.push({material,year,date:latest,transaction:t.transaction||ty,dailySum:sums[ty],yearValue:yv,diff,tolerance:tol});
+    });
+  });
+  const seen=new Set();
+  return out.filter(x=>{const k=[x.material,x.year,x.transaction].join("|");if(seen.has(k))return false;seen.add(k);return true;});
+}
+function dqZeroActivityWarnings(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    const rows=transactions(material),history=rows.filter(t=>dqIsConsumption(tType(t))&&num(t.for_day)!==null);
+    if(history.length<5)return;
+    const latestDate=history.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort().pop(); if(!latestDate)return;
+    const latest=history.filter(t=>dateOnly(rowDate(t))===latestDate);
+    const prior=history.filter(t=>dateOnly(rowDate(t))!==latestDate).map(t=>num(t.for_day)).filter(v=>v!==null&&v>0);
+    if(!prior.length)return;
+    const avg=prior.reduce((a,b)=>a+b,0)/prior.length;
+    if(latest.length&&latest.every(t=>(num(t.for_day)??0)===0)&&avg>0){
+      out.push({material,date:latestDate,avg});
+    }
+  });
+  return out.filter(x=>!VIEW_DATE||x.date===dateOnly(VIEW_DATE));
+}
+
+function dqMonthOpeningIssues(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    const byDate=dqDailyRows(material),dates=Object.keys(byDate).sort();
+    const months=[...new Set(dates.map(monthKey))].sort();
+    for(let i=1;i<months.length;i++){
+      const prevM=months[i-1],curM=months[i];
+      const prevDates=dates.filter(d=>monthKey(d)===prevM),curDates=dates.filter(d=>monthKey(d)===curM);
+      if(!prevDates.length||!curDates.length)continue;
+      const prevDate=prevDates[prevDates.length-1],curDate=curDates[0];
+      const prevEnd=new Date(Number(prevM.slice(0,4)),Number(prevM.slice(5,7)),0).toISOString().slice(0,10);
+      if(prevDate!==prevEnd||curDate.slice(8)!=="01")continue;
+      const prevClose=byDate[prevDate].filter(t=>/^(CL\. STOCK|CLOSING STOCK)$/.test(tType(t))).map(t=>tVal(t)).filter(v=>v!==null).pop();
+      const curOpen=byDate[curDate].filter(t=>tType(t)==="OPENING STOCK").map(t=>tVal(t)).filter(v=>v!==null).pop();
+      if(prevClose===null||prevClose===undefined||curOpen===null||curOpen===undefined)continue;
+      const diff=curOpen-prevClose,tol=dqTolerance(material);
+      if(Math.abs(diff)>tol)out.push({material,previousDate:prevDate,currentDate:curDate,previousClosing:prevClose,currentOpening:curOpen,diff,tolerance:tol});
+    }
+  });
+  return out;
+}
+function dqValueIntegrityIssues(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    transactions(material).forEach((t,index)=>{
+      const d=dateOnly(rowDate(t)),ty=tType(t);
+      ["for_day","for_month","for_year"].forEach(field=>{
+        if(t[field]===undefined||t[field]===null||t[field]==="")return;
+        const raw=num(t[field]);
+        if(raw===null)out.push({kind:"NON-NUMERIC",material,date:d,transaction:ty,field,value:t[field],row:index+1});
+        else if(raw<0)out.push({kind:"NEGATIVE",material,date:d,transaction:ty,field,value:raw,row:index+1});
+      });
+    });
+  });
+  return out;
+}
+function dqFieldConsistencyIssues(){
+  const out=[];
+  const topDate=dateOnly(DATA.report_date);
+  getMaterials().forEach(material=>{
+    const rows=transactions(material);
+    rows.forEach((t,index)=>{
+      const d=dateOnly(rowDate(t));
+      if(d&&topDate){
+        const delta=Math.abs((new Date(d+"T00:00:00")-new Date(topDate+"T00:00:00"))/86400000);
+        // Source transactions are often UTC 18:30 while report_date is the next local day.
+        if(delta>1)out.push({kind:"REPORT DATE",material,date:d,reportDate:topDate,transaction:tType(t),row:index+1});
+      }
+      if(t.unit){
+        const u=normalize(t.unit),expected=normalize(getMaterial(material)?.unit||"");
+        if(expected&&u&&u!==expected)out.push({kind:"UNIT",material,date:d,transaction:tType(t),row:index+1,unit:t.unit,expected:getMaterial(material)?.unit});
+      }
+      if(t.material&&normalize(t.material)!==normalize(material)){
+        out.push({kind:"MATERIAL NAME",material,date:d,transaction:tType(t),row:index+1,sourceName:t.material});
+      }
+    });
+  });
+  return out;
+}
+function dqMissingDateWarnings(){
+  const out=[];
+  getMaterials().forEach(material=>{
+    const dates=[...new Set(transactions(material).map(t=>dateOnly(rowDate(t))).filter(Boolean))].sort();
+    for(let i=1;i<dates.length;i++){
+      const prev=new Date(dates[i-1]+"T00:00:00"),cur=new Date(dates[i]+"T00:00:00");
+      const gap=Math.floor((cur-prev)/86400000);
+      if(gap>1){
+        const missing=[];
+        for(let j=1;j<gap;j++){const d=new Date(prev);d.setDate(d.getDate()+j);missing.push(d.toISOString().slice(0,10));}
+        out.push({material,from:dates[i-1],to:dates[i],missing});
+      }
+    }
+  });
+  return out;
+}
+function dqAdvancedCounts(){
+  const eq=dqStockEquationIssues(),cl=dqClosingSnapshotIssues(),mc=dqMonthlyCumulativeIssues(),yc=dqYearCumulativeIssues(),mo=dqMonthOpeningIssues(),vi=dqValueIntegrityIssues(),fc=dqFieldConsistencyIssues(),md=dqMissingDateWarnings(),za=dqZeroActivityWarnings();
+  return {eq,cl,mc,yc,mo,vi,fc,md,za};
+}
+function openDQAdvanced(){
+  const x=dqAdvancedCounts();
+  let html=`<div class="detail-section"><h3>🔬 Advanced Accuracy Checks</h3>
+    ${detail("Stock equation mismatches",x.eq.length)}
+    ${detail("Closing vs CL.STOCK",x.cl.length)}
+    ${detail("Daily → Monthly cumulative",x.mc.length)}
+    ${detail("Monthly → Year cumulative",x.yc.length)}
+    ${detail("Month closing → opening",x.mo.length)}
+    ${detail("Zero-activity warnings",x.za.length)}
+    ${detail("Value integrity errors",x.vi.length)}
+    ${detail("Field consistency errors",x.fc.length)}
+    ${detail("Missing-date warnings",x.md.length)}
+    <div class="small-note">Missing/incomplete history is skipped by reconciliation checks. Missing dates are warnings during testing, not hard errors.</div></div>`;
+  const sections=[
+    ["Stock Equation",x.eq, r=>`${detail("Material",r.material)}${detail("Date",r.date)}${detail("Opening",fmt(r.opening))}${detail("Expected Closing",fmt(r.expected))}${detail("Actual Closing",fmt(r.closing))}${detail("Difference",fmt(r.diff))}`],
+    ["Closing vs CL.STOCK",x.cl, r=>`${detail("Material",r.material)}${detail("Date",r.date)}${detail("API Closing",fmt(r.apiClosing))}${detail("CL.STOCK",fmt(r.cl))}${detail("Difference",fmt(r.diff))}`],
+    ["Daily → Monthly",x.mc, r=>`${detail("Material",r.material)}${detail("Month",r.month)}${detail("Transaction",r.transaction)}${detail("Daily Sum",fmt(r.dailySum))}${detail("for_month",fmt(r.monthlyValue))}${detail("Difference",fmt(r.diff))}`],
+    ["Monthly → Year cumulative",x.yc, r=>`${detail("Material",r.material)}${detail("Year",r.year)}${detail("Transaction",r.transaction)}${detail("Daily Sum",fmt(r.dailySum))}${detail("for_year",fmt(r.yearValue))}${detail("Difference",fmt(r.diff))}`],
+    ["Month Closing → Opening",x.mo, r=>`${detail("Material",r.material)}${detail("Previous Closing",fmt(r.previousClosing))}${detail("Current Opening",fmt(r.currentOpening))}${detail("Difference",fmt(r.diff))}`],
+    ["Value Integrity",x.vi, r=>`${detail("Material",r.material)}${detail("Date",r.date||"--")}${detail("Transaction",r.transaction)}${detail("Field",r.field)}${detail("Value",fmt(r.value))}${detail("Issue",r.kind)}`],
+    ["Field Consistency",x.fc, r=>`${detail("Material",r.material)}${detail("Date",r.date||"--")}${detail("Issue",r.kind)}${detail("Transaction",r.transaction)}${detail("Expected",r.expected||r.reportDate||"--")}${detail("Found",r.unit||r.sourceName||r.date||"--")}`],
+    ["Zero Activity • Warning",x.za, r=>`${detail("Material",r.material)}${detail("Date",r.date)}${detail("Previous average",fmt(r.avg))}${detail("Note","Consumption row is zero while historical activity exists")}`],
+    ["Missing Dates • Warning",x.md, r=>`${detail("Material",r.material)}${detail("From",r.from)}${detail("To",r.to)}${detail("Missing dates",r.missing.join(", "))}`]
+  ];
+  sections.forEach(([title,rows,render])=>{
+    if(!rows.length)return;
+    html+=`<div class="detail-section"><h3>${title} • ${rows.length}</h3>`;
+    rows.slice(0,100).forEach(r=>html+=`<div class="transaction" onclick="closeModal();openMaterialDetails('${jsq(r.material)}')">${render(r)}</div>`);
+    if(rows.length>100)html+=`<div class="small-note">Showing first 100 of ${rows.length}.</div>`;
+    html+="</div>";
+  });
+  if(!x.eq.length&&!x.cl.length&&!x.mc.length&&!x.yc.length&&!x.mo.length&&!x.vi.length&&!x.fc.length&&!x.md.length&&!x.za.length)html+=`<div class="detail-section reconcile-ok"><h3>✓ Advanced Accuracy</h3><div class="empty">No additional issues found in the available complete data.</div></div>`;
+  showModal("Advanced Accuracy",html);
+}
+
 function dqAbnormalItems(){
   // Exact abnormal-consumption rule:
   // Current > Average × 1.5  → High consumption
@@ -1717,17 +1985,20 @@ function openDQCoverage(){
   html+=`</div>`;showModal("Data Coverage",html);
 }
 function dqBuildSummary(){
-  const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage();
-  return `FEED PLANT DATA QUALITY SUMMARY\nDate: ${selectedDateForIntelligence()||DATA.report_date||"Latest"}\n\nDuplicate transaction groups: ${dup.length}\nUnknown transactions: ${unk.length}\nOpening → Closing continuity issues: ${cont.length}\nAbnormal activity: ${ab.length}\n\nCoverage:\n${cov.map(x=>`- ${x.name}: ${x.valid}/${x.total} rows (${x.percent}%)`).join("\n")}`;
+  const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage(),adv=dqAdvancedCounts();
+  return `FEED PLANT DATA QUALITY SUMMARY\nDate: ${selectedDateForIntelligence()||DATA.report_date||"Latest"}\n\nDuplicate transaction groups: ${dup.length}\nUnknown transactions: ${unk.length}\nOpening → Closing continuity issues: ${cont.length}\nAbnormal activity: ${ab.length}\nStock equation mismatches: ${adv.eq.length}\nClosing vs CL.STOCK: ${adv.cl.length}\nDaily → Monthly cumulative: ${adv.mc.length}\nMonthly → Year cumulative: ${adv.yc.length}\nMonth closing → opening: ${adv.mo.length}\nValue integrity errors: ${adv.vi.length}\nField consistency errors: ${adv.fc.length}\nZero-activity warnings: ${adv.za.length}\nMissing-date warnings: ${adv.md.length}\n\nCoverage:\n${cov.map(x=>`- ${x.name}: ${x.valid}/${x.total} rows (${x.percent}%)`).join("\n")}`;
 }
 function badDataIssueCount(){
-  const rec=reconciliationItems(),bad=rec.filter(x=>x.r.status==="MISMATCH"),no=rec.filter(x=>x.r.status==="NO DATA");
-  return bad.length+no.length+abnormalConsumptionItems().length+duplicateTransactionCount();
+  const rec=reconciliationItems(),bad=rec.filter(x=>x.r.status==="MISMATCH");
+  const adv=dqAdvancedCounts();
+  // Warnings (missing dates) are deliberately excluded from the red issue count during testing.
+  return bad.length+abnormalConsumptionItems().length+duplicateTransactionCount()
+    +adv.eq.length+adv.cl.length+adv.mc.length+adv.yc.length+adv.mo.length+adv.vi.length+adv.fc.length;
 }
 function renderDataQualityPanel(){
   const host=document.getElementById("dataQualityPanelHost");if(!host)return;
   const dup=dqDuplicateGroups(),unk=dqUnknownGroups(),cont=dqContinuityIssues(),ab=dqAbnormalItems(),cov=dqCoverage();
-  host.innerHTML=`<div class="card control-card" id="dataQualityPanel"><div class="card-title"><h2>🛡 Data Health &amp; Issues</h2><span>Quality • Accuracy • Issues</span></div><div class="control-grid"><button class="control-item" onclick="openDQDuplicates()"><small>🔁 Duplicate Transactions</small><strong>${dup.length}</strong></button><button class="control-item" onclick="openDQUnknown()"><small>❓ Unknown Transactions</small><strong>${unk.length}</strong></button><button class="control-item" onclick="openDQContinuity()"><small>🔗 Opening → Closing</small><strong>${cont.length}</strong></button><button class="control-item" onclick="openDQAbnormal()"><small>⚠ Abnormal Activity</small><strong>${ab.length}</strong></button><button class="control-item" onclick="openDQHistory()"><small>📈 Historical Trend</small><strong>${getMaterials().length}</strong></button><button class="control-item" onclick="openDQCoverage()"><small>🎯 Coverage</small><strong>${cov.filter(x=>x.percent===100).length}/${cov.length}</strong></button></div><div class="health-strip" onclick="openDataHealth()"><span>⚠ Data Issues</span><b>${badDataIssueCount()}</b> <span>View details →</span></div><div class="small-note">Consumption spelling variations are automatically treated as Consumption; only genuinely unrecognized transaction names are shown as Unknown.</div></div>`;
+  host.innerHTML=`<div class="card control-card" id="dataQualityPanel"><div class="card-title"><h2>🛡 Data Health &amp; Issues</h2><span>Quality • Accuracy • Issues</span></div><div class="control-grid"><button class="control-item" onclick="openDQDuplicates()"><small>🔁 Duplicate Transactions</small><strong>${dup.length}</strong></button><button class="control-item" onclick="openDQUnknown()"><small>❓ Unknown Transactions</small><strong>${unk.length}</strong></button><button class="control-item" onclick="openDQContinuity()"><small>🔗 Opening → Closing</small><strong>${cont.length}</strong></button><button class="control-item" onclick="openDQAbnormal()"><small>⚠ Abnormal Activity</small><strong>${ab.length}</strong></button><button class="control-item" onclick="openDQHistory()"><small>📈 Historical Trend</small><strong>${getMaterials().length}</strong></button><button class="control-item" onclick="openDQCoverage()"><small>🎯 Coverage</small><strong>${cov.filter(x=>x.percent===100).length}/${cov.length}</strong></button><button class="control-item" onclick="openDQAdvanced()"><small>🔬 Advanced Accuracy</small><strong>${(()=>{const a=dqAdvancedCounts();return a.eq.length+a.cl.length+a.mc.length+a.yc.length+a.mo.length+a.vi.length+a.fc.length})()}</strong></button></div><div class="health-strip" onclick="openDataHealth()"><span>⚠ Data Issues</span><b>${badDataIssueCount()}</b> <span>View details →</span></div><div class="small-note">Consumption spelling variations are automatically treated as Consumption; only genuinely unrecognized transaction names are shown as Unknown.</div></div>`;
 }
 function ensureDataQualityHost(){
   const premixCard=document.getElementById("premixTransferCard");
