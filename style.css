@@ -1135,3 +1135,122 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 
 /* Performance: defer rendering of below-the-fold dashboard cards until needed. */
 .desktop-grid > .card, .trend-card { content-visibility:auto; contain-intrinsic-size: 360px; }
+
+
+/* ===== Final UI Polish ===== */
+:root{
+  --ui-bg:#f5f6f8;
+  --ui-surface:#ffffff;
+  --ui-surface-soft:#f7f8fa;
+  --ui-border:#e7ebf0;
+  --ui-border-strong:#d9e0e8;
+  --ui-text:#202938;
+  --ui-muted:#707b89;
+  --ui-subtle:#8a94a2;
+  --ui-accent:#315efb;
+  --ui-success:#2f8a58;
+  --ui-warning:#946c00;
+  --ui-danger:#bd3d3d;
+  --ui-shadow:0 2px 12px rgba(22,34,51,.045);
+  --ui-radius:16px;
+}
+html{background:var(--ui-bg);-webkit-text-size-adjust:100%;text-rendering:optimizeLegibility}
+body{background:var(--ui-bg);color:var(--ui-text);line-height:1.35;font-size:14px}
+button,input,select,textarea{font:inherit}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.card,.attention-card{border:1px solid transparent;box-shadow:var(--ui-shadow)}
+.card-title{gap:12px}
+.card-title h2{letter-spacing:-.2px;line-height:1.2}
+.card-title span{color:var(--ui-muted)}
+.quick,.mini,.feed-total,.pp-item{border:1px solid transparent;transition:transform .16s ease,background .16s ease,border-color .16s ease}
+.quick:hover,.mini:hover,.feed-total:hover,.pp-item:hover{background:#f3f6fb;border-color:#e2e8f0}
+.quick:active,.mini:active,.feed-total:active,.pp-item:active{transform:scale(.99)}
+.header-tool,.header-actions button,.refresh,.install,.close{transition:background .16s ease,transform .16s ease,box-shadow .16s ease}
+.header-tool:focus-visible,.refresh:focus-visible,.install:focus-visible,.close:focus-visible,.section-tabs button:focus-visible,.attention-view-all:focus-visible,.report-view-btn:focus-visible{outline:3px solid rgba(49,94,251,.2);outline-offset:2px}
+.section-tabs{scrollbar-width:none;padding-bottom:2px}.section-tabs::-webkit-scrollbar{display:none}
+.section-tabs button{border:1px solid transparent;transition:background .16s ease,color .16s ease,border-color .16s ease}
+.section-tabs button:not(.active){border-color:#e3e8ef;background:#fafbfd;color:#596576}
+.status-line{min-height:24px}
+.status-dot{flex:0 0 auto}
+.status-dot.off{box-shadow:0 0 0 3px rgba(211,84,84,.09)}
+.status-dot:not(.off){box-shadow:0 0 0 3px rgba(49,163,106,.09)}
+.empty{min-height:30px;display:flex;align-items:center;color:var(--ui-subtle);border-radius:10px}
+.error-box{border:1px solid #f0d6d6}
+
+/* Loading skeletons: applied automatically to existing "Loading..." placeholders. */
+.loading-state{position:relative;overflow:hidden;color:transparent!important;background:linear-gradient(90deg,#f3f5f7 25%,#e9edf2 37%,#f3f5f7 63%);background-size:400% 100%;animation:uiSkeleton 1.35s ease-in-out infinite;min-height:38px;border-radius:10px}
+.loading-state::after{content:"";display:block;width:62%;height:9px;border-radius:6px;background:rgba(255,255,255,.72)}
+@keyframes uiSkeleton{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+
+/* Consistent status language. */
+.good,.warn,.bad{font-weight:700}
+.status-symbol{font-variant-numeric:tabular-nums}
+
+/* Tablet / desktop breathing room without changing the information architecture. */
+@media(min-width:701px){
+  body{padding-bottom:24px}
+  .container{max-width:1120px;padding:18px 20px}
+  .header{margin-bottom:14px}
+  .card{padding:15px;margin-bottom:13px;border-radius:18px}
+  .quick-grid{gap:10px}
+  .quick{padding:10px}
+  .desktop-grid{gap:14px}
+  .bottom-nav{display:none}
+  .modal{align-items:center;padding:20px}
+  .modal-box{border-radius:22px;max-height:88vh;box-shadow:0 18px 60px rgba(15,23,42,.18)}
+}
+@media(min-width:1100px){
+  .container{max-width:1220px}
+  .card-title h2{font-size:18px}
+}
+
+/* Phone layout: prevent cramped controls and horizontal overflow. */
+@media(max-width:520px){
+  .container{padding:10px}
+  .header h1{font-size:21px;letter-spacing:-.3px}
+  .header-actions{gap:5px}
+  .header-tool,.notify-btn,.plant{width:38px;height:38px}
+  .card{border-radius:15px;padding:11px;margin-bottom:9px}
+  .card-title{align-items:flex-start}
+  .card-title h2{font-size:15px}
+  .card-title span{font-size:10px}
+  .quick-grid{gap:7px}
+  .quick{min-width:0;padding:8px}
+  .quick p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .quick strong{font-size:14px}
+  .stock-head,.stock-row{grid-template-columns:1.2fr .8fr .85fr .7fr .8fr;gap:4px}
+  .stock-row{padding:7px 3px}
+  .production-total{font-size:29px}
+  .bottom-nav{height:64px;padding-bottom:env(safe-area-inset-bottom);}
+  .modal-box{max-height:92vh;padding:14px;border-radius:20px 20px 0 0}
+  .attention-overview-stats{gap:5px}
+}
+@media(max-width:360px){
+  .container{padding:8px}
+  .header h1{font-size:19px}
+  .header-actions{gap:3px}
+  .header-tool,.notify-btn,.plant{width:35px;height:35px;font-size:18px}
+  .quick-grid,.pp-grid,.feed-total-grid,.mini-grid{gap:6px}
+  .quick strong{font-size:13px}
+}
+
+/* System dark mode. Explicit app surfaces are kept visually consistent. */
+@media(prefers-color-scheme:dark){
+  :root{
+    --ui-bg:#0f141b;--ui-surface:#151b23;--ui-surface-soft:#1b222c;
+    --ui-border:#29313c;--ui-border-strong:#35404d;--ui-text:#edf2f7;
+    --ui-muted:#a7b0bc;--ui-subtle:#8e99a7;--ui-shadow:0 3px 18px rgba(0,0,0,.22)
+  }
+  body{background:var(--ui-bg);color:var(--ui-text)}
+  .card,.attention-card,.modal-box,.notify-btn,.plant,.refresh,.install,.header-tool,.close,.report-view-panel,.transaction{background:var(--ui-surface);color:var(--ui-text)}
+  .quick,.mini,.feed-total,.pp-item,.detail-section,.trend-card,.stock-head,.mix-panel,.transaction-value{background:var(--ui-surface-soft);color:var(--ui-text)}
+  .stock-head,.stock-row,.feed-row,.production-row,.premix-total,.detail-row,.transaction{border-color:var(--ui-border)}
+  .section-tabs button:not(.active),select,.mix-month-select,.report-view-btn,.report-close-btn{background:var(--ui-surface-soft)!important;color:var(--ui-text)!important;border-color:var(--ui-border-strong)!important}
+  .header p,.card-title span,.quick p,.mini p,.feed-total p,.pp-item p,.prod-meta,.row-right small,.small-note,.empty,.attention-meta,.mix-panel-head small,.monthly-mix-note{color:var(--ui-muted)}
+  .bottom-nav{background:rgba(21,27,35,.97);border-color:var(--ui-border)}
+  .loading-state{background:linear-gradient(90deg,#1a212a 25%,#242d38 37%,#1a212a 63%);background-size:400% 100%}
+  .loading-state::after{background:rgba(255,255,255,.08)}
+  .error-box{background:#2a1719;color:#ffb4b4;border-color:#553033}
+  .attention-card.has-critical{border-color:#5a3030}.attention-card.has-warning{border-color:#554b2d}
+}

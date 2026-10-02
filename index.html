@@ -334,6 +334,27 @@
   <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script id="uiLoadingObserver" defer>
+  (function(){
+    function markLoading(root){
+      (root||document).querySelectorAll('.empty').forEach(function(el){
+        var t=(el.textContent||'').trim().toLowerCase();
+        if(t === 'loading...' || t === 'loading spare parts...') el.classList.add('loading-state');
+        else el.classList.remove('loading-state');
+      });
+    }
+    document.addEventListener('DOMContentLoaded',function(){
+      markLoading(document);
+      new MutationObserver(function(m){
+        m.forEach(function(x){
+          x.addedNodes && x.addedNodes.forEach(function(n){
+            if(n.nodeType===1) markLoading(n.parentNode||n);
+          });
+        });
+      }).observe(document.body,{subtree:true,childList:true});
+    });
+  })();
+  </script>
   <script defer src="app.js"></script>
 </body>
 </html>
