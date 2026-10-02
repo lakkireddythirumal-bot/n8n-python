@@ -1098,33 +1098,3 @@ select{border-color:#dfe5ee!important;box-shadow:0 2px 8px rgba(31,47,77,.04)}
 .attention-summary-row.warning .attention-summary-text{color:#8a6700}
 .attention-summary-row.critical .attention-summary-text{color:#c33d3d}
 @media(max-width:420px){.attention-summary-row{padding:7px 2px}.attention-summary-text{font-size:10.5px}}
-
-/* =====================================================
-   3-DAY TOTAL DATA ACCURACY TEST — TEMPORARY LAB
-===================================================== */
-.accuracy-lab-card{border:1px solid #dfe5ee;background:linear-gradient(145deg,#ffffff,#f8fafc);overflow:hidden}
-.accuracy-lab-card .card-title{align-items:center}
-.accuracy-lab-card .card-title>div{min-width:0}
-.accuracy-lab-card .card-title h2{margin-bottom:2px}
-.accuracy-lab-card .card-title span{font-size:10px;color:#64748b}
-.accuracy-plan-btn{border:1px solid #d9e0ea;background:#fff;border-radius:9px;padding:7px 10px;font-size:10px;font-weight:800;color:#315efb;cursor:pointer}
-.accuracy-date-banner{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 12px;margin:0 0 8px;border-radius:11px;background:#f3f6fb;border:1px solid #e5eaf2}
-.accuracy-date-banner small{display:block;font-size:8px;font-weight:800;letter-spacing:.08em;color:#64748b;margin-bottom:3px}
-.accuracy-date-banner strong{font-size:12px;color:#172033}
-.accuracy-rule{padding:9px 11px;border-radius:10px;background:#eef6ff;border:1px solid #d9eaff;color:#27466d;font-size:10px;line-height:1.45;margin-bottom:9px}
-.accuracy-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
-.accuracy-summary-grid button{border:1px solid #e5e9ef;background:#fff;border-radius:10px;padding:8px 5px;text-align:center;cursor:pointer;min-height:54px}
-.accuracy-summary-grid small{display:block;font-size:8px;font-weight:900;letter-spacing:.05em;color:#64748b}
-.accuracy-summary-grid strong{display:block;font-size:18px;line-height:1.1;margin-top:3px;color:#172033}
-.accuracy-summary-grid button:nth-child(1) strong{color:#9b1c1c}.accuracy-summary-grid button:nth-child(2) strong{color:#c0392b}.accuracy-summary-grid button:nth-child(3) strong{color:#b26a00}.accuracy-summary-grid button:nth-child(4) strong{color:#9a6a00}.accuracy-summary-grid button:nth-child(5) strong{color:#315efb}.accuracy-summary-grid button:nth-child(6) strong{color:#28794d}
-.accuracy-all-btn{width:100%;margin-top:8px;border:0;border-radius:10px;padding:10px;background:#172033;color:#fff;font-size:10px;font-weight:800;cursor:pointer}
-.accuracy-note{font-size:9px;line-height:1.45;color:#64748b;margin-top:8px}
-.accuracy-detail-head{display:flex;justify-content:space-between;gap:10px;padding:9px 11px;border-radius:10px;background:#f3f6fb;border:1px solid #e5eaf2;margin-bottom:9px;font-size:10px}
-.accuracy-detail-head span{font-weight:800;color:#315efb;text-align:right}
-.accuracy-result{border:1px solid #e6eaf0;border-radius:10px;padding:9px;margin:7px 0;background:#fff}
-.accuracy-result-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px;font-size:10px}
-.accuracy-result-top span{font-size:8px;font-weight:900;border-radius:999px;padding:3px 6px;background:#f2f4f7;color:#475569}
-.accuracy-error{border-left:4px solid #dc3545}.accuracy-critical{border-left:4px solid #991b1b;background:#fff8f8}.accuracy-review{border-left:4px solid #d97706}.accuracy-warning{border-left:4px solid #ca8a04}.accuracy-pending{border-left:4px solid #315efb}.accuracy-pass{border-left:4px solid #2f855a}
-.accuracy-plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
-.accuracy-plan-grid span{padding:7px 8px;border-radius:8px;background:#fff;border:1px solid #e6eaf0;font-size:9px;color:#334155}
-@media(max-width:520px){.accuracy-summary-grid{grid-template-columns:repeat(2,1fr)}.accuracy-plan-grid{grid-template-columns:1fr}}
