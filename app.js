@@ -2364,8 +2364,51 @@ function renderPlantAI(kind="status"){
   const a=plantAIAnswer(kind);
   box.innerHTML=`<div class="plant-ai-answer"><h4>${esc(a.title)}</h4><p>${esc(a.intro)}</p>${a.findings.map(f=>`<div class="plant-ai-finding"><span class="ai-dot ${f.level}"></span><div><strong>${esc(f.title)}</strong><p>${esc(f.body)}</p></div></div>`).join("")}${a.actions.length?`<div class="plant-ai-answer" style="background:#f7f9fc;margin-top:10px"><strong style="font-size:11px">Suggested checks</strong>${a.actions.map(x=>`<p>• ${esc(x)}</p>`).join("")}</div>`:""}<div class="plant-ai-note">Analysis date: ${esc(a.date)} • Based on data already loaded in this dashboard. Always verify operational conditions before taking plant action.</div></div>`;
 }
+function plantAINormalizeQuestion(q){
+  return String(q||'').toLowerCase().replace(/[^a-z0-9%\.\s-]/g,' ').replace(/\s+/g,' ').trim();
+}
+function plantAIIntent(q){
+  const s=plantAINormalizeQuestion(q);
+  if(!s)return 'status';
+  if(/production|output|pellet|tonnage|tph|produce|manufactur/.test(s))return 'production';
+  if(/raw material|rm |stock|inventory|maize|rice|soy|premix|material|reorder|cover|shortage/.test(s))return 'materials';
+  if(/consumption|consume|usage|used|variance|abnormal/.test(s))return 'consumption';
+  if(/dispatch|sale|sales|delivery|outward/.test(s))return 'dispatch';
+  if(/attention|alert|warning|critical|problem|issue|today|risk|urgent/.test(s))return 'status';
+  if(/health|condition|status|how is|how are|overall|plant/.test(s))return 'status';
+  return 'status';
+}
+function plantAIAnswerNatural(question){
+  const q=String(question||'').trim();
+  const intent=plantAIIntent(q);
+  const base=plantAIAnswer(intent);
+  if(intent==='dispatch'){
+    const m=plantAIMetrics();
+    const findings=[];
+    if(m.dispatch>0) findings.push({level:m.production>0&&m.dispatch>m.production?'warning':'info',title:`Current dispatch: ${fmt(m.dispatch)} MT`,body:`${m.products||0} feed product record(s) are available for ${m.date}.`});
+    if(m.production>0){const ratio=m.dispatch/m.production*100;findings.push({level:ratio>100?'warning':'good',title:`Dispatch / production: ${fmt(ratio)}%`,body:ratio>100?'Dispatch exceeds today\'s recorded production; verify opening stock, previous stock and date alignment.':'Dispatch is within today\'s recorded production volume.'});}
+    return {title:'Dispatch analysis',intro:q?`I analysed the loaded dashboard data for: “${q}”`:'Dispatch status',findings:findings.length?findings:[{level:'info',title:'No dispatch data available',body:'There is no matching dispatch record for the selected date.'}],actions:['Review dispatch and feed closing details if the quantity looks unusual.'],date:m.date};
+  }
+  base.intro=q?`I analysed the loaded dashboard data for: “${q}”. ${base.intro}`:base.intro;
+  return base;
+}
+function askPlantAI(){
+  const input=document.getElementById('plantAIQuestion');
+  const q=input?input.value.trim():'';
+  if(!q){showToast('Type a question first'); if(input)input.focus(); return;}
+  renderPlantAIQuestion(q);
+}
+function renderPlantAIQuestion(question){
+  const box=document.getElementById('plantAIAnswer');if(!box)return;
+  box.innerHTML='<div class="plant-ai-thinking"><span class="plant-ai-spinner"></span> Analysing plant data…</div>';
+  setTimeout(()=>{
+    const a=plantAIAnswerNatural(question);
+    box.innerHTML=`<div class="plant-ai-answer"><h4>${esc(a.title)}</h4><p>${esc(a.intro)}</p>${a.findings.map(f=>`<div class="plant-ai-finding"><span class="ai-dot ${f.level}"></span><div><strong>${esc(f.title)}</strong><p>${esc(f.body)}</p></div></div>`).join('')}${a.actions.length?`<div class="plant-ai-answer" style="background:#f7f9fc;margin-top:10px"><strong style="font-size:11px">Suggested checks</strong>${a.actions.map(x=>`<p>• ${esc(x)}</p>`).join('')}</div>`:''}<div class="plant-ai-note">Analysis date: ${esc(a.date)} • Uses data already loaded in this dashboard. Verify operational conditions before taking plant action.</div></div>`;
+  },120);
+}
+function setPlantAIQuestion(q){const input=document.getElementById('plantAIQuestion');if(input){input.value=q;input.focus();}}
 function openPlantAI(){
-  const html=`<div class="plant-ai-hero"><div class="plant-ai-status"><span></span>Plant Intelligence</div><h3>🤖 Plant AI</h3><p>Ask the dashboard what needs attention. Answers use the current plant data, alerts, stock coverage and production records already loaded.</p><div class="plant-ai-actions"><button class="plant-ai-action" onclick="renderPlantAI('status')">What needs attention today?<small>Critical & warning conditions</small></button><button class="plant-ai-action" onclick="renderPlantAI('production')">Why is production under pressure?<small>Output & dispatch signals</small></button><button class="plant-ai-action" onclick="renderPlantAI('materials')">Which RM needs attention?<small>Stock cover & reorder</small></button><button class="plant-ai-action" onclick="renderPlantAI('consumption')">Is consumption normal?<small>Consumption anomalies</small></button></div></div><div id="plantAIAnswer"></div>`;
+  const html=`<div class="plant-ai-hero"><div class="plant-ai-status"><span></span>Plant Intelligence</div><h3>🤖 Plant AI</h3><p>Ask the dashboard what needs attention. Answers use the current plant data, alerts, stock coverage and production records already loaded.</p><div class="plant-ai-ask"><input id="plantAIQuestion" type="text" autocomplete="off" placeholder="Ask Plant AI… e.g. Why is production low today?" onkeydown="if(event.key==='Enter')askPlantAI()"><button onclick="askPlantAI()">Ask</button></div><div class="plant-ai-suggestions"><span>Try:</span><button onclick="setPlantAIQuestion('Why is production low today?')">Why is production low?</button><button onclick="setPlantAIQuestion('Which raw material needs attention?')">Which RM needs attention?</button><button onclick="setPlantAIQuestion('Is consumption normal?')">Is consumption normal?</button></div><div class="plant-ai-actions"><button class="plant-ai-action" onclick="renderPlantAI('status')">What needs attention today?<small>Critical & warning conditions</small></button><button class="plant-ai-action" onclick="renderPlantAI('production')">Why is production under pressure?<small>Output & dispatch signals</small></button><button class="plant-ai-action" onclick="renderPlantAI('materials')">Which RM needs attention?<small>Stock cover & reorder</small></button><button class="plant-ai-action" onclick="renderPlantAI('consumption')">Is consumption normal?<small>Consumption anomalies</small></button></div></div><div id="plantAIAnswer"></div>`;
   showModal("🤖 Plant AI",html);
   renderPlantAI("status");
 }
