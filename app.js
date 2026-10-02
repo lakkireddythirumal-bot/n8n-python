@@ -846,46 +846,105 @@ function renderDashboard(){
 }
 
 
-function attentionSummaryItems(){
-  const items=[];
-  const materials=getMaterials();
-  const reorderCount=materials.filter(m=>stockStatus(num(getMaterial(m)?.closing)||0,avgConsumption(m)).status==="REORDER").length;
-  const under3Count=materials.filter(m=>{const c=num(getMaterial(m)?.closing)||0,s=stockStatus(c,avgConsumption(m));return s.cover!==null&&s.cover<3}).length;
-  const abnormalCount=abnormalConsumptionItems().length;
-
-  // Count PP-bag products whose damage is higher than the previous available day.
-  let damageIncreaseCount=0;
+function attentionReorderMaterials(){
+  return getMaterials().map(m=>{
+    const x=getMaterial(m), c=num(x?.closing)||0, avg=avgConsumption(m), s=stockStatus(c,avg);
+    return {m,c,avg,s,unit:x?.unit||"MT"};
+  }).filter(x=>x.s.status==="REORDER");
+}
+function attentionUnder3Materials(){
+  return getMaterials().map(m=>{
+    const x=getMaterial(m), c=num(x?.closing)||0, avg=avgConsumption(m), s=stockStatus(c,avg);
+    return {m,c,avg,s,unit:x?.unit||"MT"};
+  }).filter(x=>x.s.cover!==null && x.s.cover<3);
+}
+function attentionAbnormalConsumption(){
+  return abnormalConsumptionItems();
+}
+function attentionIncreasedBagDamage(){
+  const selected=selectedBags();
   const dates=allAvailableDates().slice().sort();
-  const selected=selectedDateForIntelligence();
-  if(selected){
-    const idx=dates.indexOf(dateOnly(selected));
-    const prev=idx>0?dates[idx-1]:null;
-    if(prev){
-      const today=new Map(),yesterday=new Map();
-      selectedBags().forEach(r=>today.set(normalize(r.product||"PP Bags"),(num(r.damage)||0)));
-      const hist=Array.isArray(DATA.bagsHistory)?DATA.bagsHistory:[];
-      hist.filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===prev)
-        .forEach(r=>yesterday.set(normalize(r.product||"PP Bags"),(num(r.damage)||0)));
-      today.forEach((v,k)=>{if(v>(yesterday.get(k)||0))damageIncreaseCount++});
-    }else{
-      damageIncreaseCount=selectedBags().filter(r=>(num(r.damage)||0)>0).length;
-    }
+  const selectedDate=selectedDateForIntelligence();
+  if(!selected.length)return [];
+  let prev=null;
+  if(selectedDate){
+    const idx=dates.indexOf(dateOnly(selectedDate));
+    prev=idx>0?dates[idx-1]:null;
   }
-
-  const pendingOrders=(SPARE_DATA.SPARE_ORDERS||[]).filter(r=>{
+  if(!prev){
+    return selected.filter(r=>(num(r.damage)||0)>0).map(r=>({product:r.product||"PP Bags",damage:num(r.damage)||0,previous:null}));
+  }
+  const yesterday=new Map();
+  (Array.isArray(DATA.bagsHistory)?DATA.bagsHistory:[])
+    .filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===prev)
+    .forEach(r=>yesterday.set(normalize(r.product||"PP Bags"),num(r.damage)||0));
+  return selected.map(r=>{
+    const product=r.product||"PP Bags", damage=num(r.damage)||0, previous=yesterday.get(normalize(product))||0;
+    return {product,damage,previous};
+  }).filter(x=>x.damage>x.previous);
+}
+function attentionPendingSpareOrders(){
+  const rows=Array.isArray(SPARE_DATA.SPARE_ORDERS)?SPARE_DATA.SPARE_ORDERS:[];
+  return rows.filter(r=>{
     const st=normalize(spareVal(r,['STATUS','Status','ORDER_STATUS','Order_Status']));
-    return !st || /PENDING|OPEN|ORDERED|PROCESS/.test(st);
-  }).length;
-
-  const productionRows=selectedProduction();
-  const productionIssues=productionRows.filter(r=>{const op=num(r.output_percentage);return op!==null&&op<95}).length;
-
-  items.push({icon:reorderCount?'🔴':'🟢',level:reorderCount?'critical':'clear',text:`${reorderCount} Raw Materials below reorder level`,action:"openStockForecast()"});
-  items.push({icon:under3Count?'🟡':'🟢',level:under3Count?'warning':'clear',text:`${under3Count} materials stock < 3 days`,action:"openStockForecast()"});
-  items.push({icon:abnormalCount?'🔴':'🟢',level:abnormalCount?'critical':'clear',text:`${abnormalCount} abnormal consumption`,action:"openNotifications()"});
-  items.push({icon:damageIncreaseCount?'🟡':'🟢',level:damageIncreaseCount?'warning':'clear',text:`${damageIncreaseCount} PP bag damages increased`,action:"openPPBagDetails()"});
-  items.push({icon:pendingOrders?'🔵':'🟢',level:pendingOrders?'info':'clear',text:`${pendingOrders} spare parts pending order`,action:"goSpareParts()"});
-  items.push({icon:productionIssues?'🟡':'🟢',level:productionIssues?'warning':'clear',text:productionIssues?`${productionIssues} production output below 95%`:'Production normal',action:"openProductionDetails('')"});
+    return /PENDING|OPEN|PROCESS/.test(st);
+  });
+}
+function attentionProductionIssues(){
+  return selectedProduction().filter(r=>{
+    const op=num(r.output_percentage);
+    return op!==null && Number.isFinite(op) && op<95;
+  });
+}
+function spareOrderDisplayName(r){
+  return clean(spareVal(r,['PART_NAME','Part_Name','PART','Part','ITEM','Item','MATERIAL','Material','NAME','Name','DESCRIPTION','Description']))||"Spare Part";
+}
+function openAttentionFiltered(kind){
+  if(kind==="reorder"){
+    const rows=attentionReorderMaterials();
+    const html=`<div class="detail-section"><h3>🔴 Raw Materials below reorder level • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(x.m)}')"><div><div class="row-name">${esc(x.m)}</div><div class="prod-meta">Stock ${fmt(x.c)} ${esc(x.unit)} • Avg ${fmt(x.avg)} ${esc(x.unit)}/day</div></div><div class="row-right"><strong>${x.s.cover===null?"--":fmt(x.s.cover)+" d"}</strong><small>Reorder</small></div></div>`).join("")||"<div class='empty'>No materials below reorder level.</div>"}</div>`;
+    showModal("🔴 Reorder Materials",html); return;
+  }
+  if(kind==="under3"){
+    const rows=attentionUnder3Materials().sort((a,b)=>a.s.cover-b.s.cover);
+    const html=`<div class="detail-section"><h3>🟡 Stock coverage below 3 days • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(x.m)}')"><div><div class="row-name">${esc(x.m)}</div><div class="prod-meta">Stock ${fmt(x.c)} ${esc(x.unit)} • Avg ${fmt(x.avg)} ${esc(x.unit)}/day</div></div><div class="row-right"><strong>${fmt(x.s.cover)} d</strong><small>&lt; 3 days</small></div></div>`).join("")||"<div class='empty'>No materials below 3 days coverage.</div>"}</div>`;
+    showModal("🟡 Low Coverage",html); return;
+  }
+  if(kind==="abnormal"){
+    const rows=attentionAbnormalConsumption();
+    const html=`<div class="detail-section"><h3>🔴 Abnormal consumption • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(x.material)}')"><div><div class="row-name">${esc(x.material)}</div><div class="prod-meta">${esc(x.direction==="LOW"?"Below":"Above")} average • ${fmt(x.current)} vs ${fmt(x.avg)}</div></div><div class="row-right"><strong>${fmt(Math.abs(x.ratio*100-100))}%</strong><small>${esc(x.date||"Latest")}</small></div></div>`).join("")||"<div class='empty'>No abnormal consumption found.</div>"}</div>`;
+    showModal("🔴 Abnormal Consumption",html); return;
+  }
+  if(kind==="bags"){
+    const rows=attentionIncreasedBagDamage();
+    const html=`<div class="detail-section"><h3>🟡 PP bag damages increased • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openBagProduct('${jsq(x.product)}')"><div><div class="row-name">${esc(x.product)}</div><div class="prod-meta">Previous damage ${fmt(x.previous)} • Current ${fmt(x.damage)}</div></div><div class="row-right"><strong>+${fmt(x.damage-x.previous)}</strong><small>Damage increase</small></div></div>`).join("")||"<div class='empty'>No PP bag damage increase found.</div>"}</div>`;
+    showModal("🟡 PP Bag Damage",html); return;
+  }
+  if(kind==="spares"){
+    const rows=attentionPendingSpareOrders();
+    const html=`<div class="detail-section"><h3>🔵 Spare parts pending order • ${rows.length}</h3>${rows.map(r=>`<div class="feed-row" onclick="goSpareParts();closeModal()"><div><div class="row-name">${esc(spareOrderDisplayName(r))}</div><div class="prod-meta">Status: ${esc(spareVal(r,['STATUS','Status','ORDER_STATUS','Order_Status'])||"--")}</div></div><div class="row-right"><strong>Pending</strong><small>Open Spare Parts</small></div></div>`).join("")||"<div class='empty'>No pending spare orders.</div>"}</div>`;
+    showModal("🔵 Pending Spare Orders",html); return;
+  }
+  if(kind==="production"){
+    const rows=attentionProductionIssues();
+    const html=`<div class="detail-section"><h3>🟡 Production output below 95% • ${rows.length}</h3>${rows.map(r=>{const p=r.product||"--",op=num(r.output_percentage);return `<div class="feed-row" onclick="closeModal();openProductDetails('${jsq(p)}')"><div><div class="row-name">${esc(p)}</div><div class="prod-meta">Output ${fmt(op)}%</div></div><div class="row-right"><strong>${fmt(op)}%</strong><small>Below 95%</small></div></div>`}).join("")||"<div class='empty'>No valid production records below 95%.</div>"}</div>`;
+    showModal("🟡 Production Output",html); return;
+  }
+}
+function attentionSummaryItems(){
+  const reorderRows=attentionReorderMaterials();
+  const under3Rows=attentionUnder3Materials();
+  const abnormalRows=attentionAbnormalConsumption();
+  const bagRows=attentionIncreasedBagDamage();
+  const spareRows=attentionPendingSpareOrders();
+  const productionRows=attentionProductionIssues();
+  const items=[];
+  items.push({icon:reorderRows.length?'🔴':'🟢',level:reorderRows.length?'critical':'clear',text:`${reorderRows.length} Raw Materials below reorder level`,action:"openAttentionFiltered('reorder')"});
+  items.push({icon:under3Rows.length?'🟡':'🟢',level:under3Rows.length?'warning':'clear',text:`${under3Rows.length} materials stock < 3 days`,action:"openAttentionFiltered('under3')"});
+  items.push({icon:abnormalRows.length?'🔴':'🟢',level:abnormalRows.length?'critical':'clear',text:`${abnormalRows.length} abnormal consumption`,action:"openAttentionFiltered('abnormal')"});
+  items.push({icon:bagRows.length?'🟡':'🟢',level:bagRows.length?'warning':'clear',text:`${bagRows.length} PP bag damages increased`,action:"openAttentionFiltered('bags')"});
+  items.push({icon:spareRows.length?'🔵':'🟢',level:spareRows.length?'info':'clear',text:`${spareRows.length} spare parts pending order`,action:"openAttentionFiltered('spares')"});
+  items.push({icon:productionRows.length?'🟡':'🟢',level:productionRows.length?'warning':'clear',text:productionRows.length?`${productionRows.length} production output below 95%`:'Production normal',action:"openAttentionFiltered('production')"});
   return items;
 }
 
