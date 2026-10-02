@@ -856,7 +856,7 @@ function attentionUnder3Materials(){
   return getMaterials().map(m=>{
     const x=getMaterial(m), c=num(x?.closing)||0, avg=avgConsumption(m), s=stockStatus(c,avg);
     return {m,c,avg,s,unit:x?.unit||"MT"};
-  }).filter(x=>x.s.cover!==null && x.s.cover<3);
+  }).filter(x=>x.s.cover!==null && x.s.cover<3 && x.s.status!=="REORDER");
 }
 function attentionAbnormalConsumption(){
   return abnormalConsumptionItems();
@@ -939,35 +939,59 @@ function attentionSummaryItems(){
   const spareRows=attentionPendingSpareOrders();
   const productionRows=attentionProductionIssues();
   const items=[];
-  items.push({icon:reorderRows.length?'🔴':'🟢',level:reorderRows.length?'critical':'clear',text:`${reorderRows.length} Raw Materials below reorder level`,action:"openAttentionFiltered('reorder')"});
-  items.push({icon:under3Rows.length?'🟡':'🟢',level:under3Rows.length?'warning':'clear',text:`${under3Rows.length} materials stock < 3 days`,action:"openAttentionFiltered('under3')"});
-  items.push({icon:abnormalRows.length?'🔴':'🟢',level:abnormalRows.length?'critical':'clear',text:`${abnormalRows.length} abnormal consumption`,action:"openAttentionFiltered('abnormal')"});
-  items.push({icon:bagRows.length?'🟡':'🟢',level:bagRows.length?'warning':'clear',text:`${bagRows.length} PP bag damages increased`,action:"openAttentionFiltered('bags')"});
-  items.push({icon:spareRows.length?'🔵':'🟢',level:spareRows.length?'info':'clear',text:`${spareRows.length} spare parts pending order`,action:"openAttentionFiltered('spares')"});
-  items.push({icon:productionRows.length?'🟡':'🟢',level:productionRows.length?'warning':'clear',text:productionRows.length?`${productionRows.length} production output below 95%`:'Production normal',action:"openAttentionFiltered('production')"});
+  items.push({icon:reorderRows.length?'🔴':'🟢',level:reorderRows.length?'critical':'clear',count:reorderRows.length,text:`${reorderRows.length} Raw Materials below reorder level`,reason:reorderRows.length?"Immediate replenishment recommended":"No material is below its reorder level",action:"openAttentionFiltered('reorder')"});
+  items.push({icon:under3Rows.length?'🟡':'🟢',level:under3Rows.length?'warning':'clear',count:under3Rows.length,text:`${under3Rows.length} materials with < 3 days cover`,reason:under3Rows.length?"Coverage is low but not yet at reorder level":"No additional low-coverage materials",action:"openAttentionFiltered('under3')"});
+  items.push({icon:abnormalRows.length?'🔴':'🟢',level:abnormalRows.length?'critical':'clear',count:abnormalRows.length,text:`${abnormalRows.length} abnormal consumption`,reason:abnormalRows.length?"Consumption is outside the normal pattern":"Consumption is within the monitored range",action:"openAttentionFiltered('abnormal')"});
+  items.push({icon:bagRows.length?'🟡':'🟢',level:bagRows.length?'warning':'clear',count:bagRows.length,text:`${bagRows.length} PP bag damage increases`,reason:bagRows.length?"Damage is higher than the previous available day":"No increase in recorded damage",action:"openAttentionFiltered('bags')"});
+  items.push({icon:spareRows.length?'🔵':'🟢',level:spareRows.length?'info':'clear',count:spareRows.length,text:`${spareRows.length} spare orders pending`,reason:spareRows.length?"Open / pending spare orders need follow-up":"No pending spare orders",action:"openAttentionFiltered('spares')"});
+  items.push({icon:productionRows.length?'🟡':'🟢',level:productionRows.length?'warning':'clear',count:productionRows.length,text:productionRows.length?`${productionRows.length} production outputs below 95%`:'Production output normal',reason:productionRows.length?"Output percentage is below the 95% threshold":"All selected production records are ≥ 95%",action:"openAttentionFiltered('production')"});
   return items;
 }
 
+function attentionTotalCount(items){
+  return items.reduce((sum,x)=>sum+(Number(x.count)||0),0);
+}
+function openAttentionOverview(){
+  const items=attentionSummaryItems().filter(x=>x.level!=="clear");
+  if(!items.length){
+    showModal("✓ Attention Required",`<div class="attention-overview-clear"><div class="attention-clear-mark">✓</div><h3>Everything is under control</h3><p>No active attention items were detected for the selected date.</p></div>`);
+    return;
+  }
+  const total=attentionTotalCount(items);
+  const critical=items.filter(x=>x.level==="critical").reduce((n,x)=>n+(Number(x.count)||0),0);
+  const warning=items.filter(x=>x.level==="warning").reduce((n,x)=>n+(Number(x.count)||0),0);
+  const html=`<div class="attention-overview">
+    <div class="attention-overview-stats"><div><strong>${total}</strong><small>Total items</small></div><div class="critical"><strong>${critical}</strong><small>Critical</small></div><div class="warning"><strong>${warning}</strong><small>Warning</small></div></div>
+    <div class="attention-overview-list">${items.map(x=>{const cls=x.level;return `<button type="button" class="attention-overview-row ${cls}" onclick="${x.action}"><span class="attention-overview-icon">${x.icon}</span><span><strong>${esc(x.text)}</strong><small>${esc(x.reason||"Open affected items")}</small></span><b>›</b></button>`}).join("")}</div>
+  </div>`;
+  showModal("⚠️ Attention Required",html);
+}
 function renderAttentionRequired(){
   const card=document.getElementById("attentionRequiredCard");
   const list=document.getElementById("attentionList");
   const count=document.getElementById("attentionCount");
+  const status=document.getElementById("attentionStatus");
+  const meta=document.getElementById("attentionMeta");
   if(!card||!list)return;
   const items=attentionSummaryItems();
   const active=items.filter(x=>x.level!=="clear");
-  const critical=active.filter(x=>x.level==="critical").length;
-  if(count){count.textContent=String(active.length);count.className="attention-count"+(critical?" critical":active.length?" warning":" clear")}
+  const total=attentionTotalCount(active);
+  const critical=active.filter(x=>x.level==="critical").reduce((n,x)=>n+(Number(x.count)||0),0);
+  const warning=active.filter(x=>x.level==="warning").reduce((n,x)=>n+(Number(x.count)||0),0);
+  if(count){count.textContent=String(total);count.className="attention-count"+(critical?" critical":total?" warning":" clear")}
+  if(status){status.textContent=critical?"ACTION NEEDED":total?"CHECK":"ALL CLEAR";status.className="attention-status"+(critical?" critical":total?" warning":" clear")}
+  if(meta){meta.textContent=total?`${critical} critical • ${warning} warning`:`No active issues for ${selectedDateForIntelligence()||"latest data"}`}
   card.classList.toggle("has-critical",critical>0);
-  card.classList.toggle("has-warning",critical===0&&active.length>0);
-  card.classList.toggle("is-clear",active.length===0);
-  list.innerHTML=items.map(x=>{
-    const cls=x.level==="critical"?"critical":x.level==="warning"?"warning":x.level==="info"?"info":"clear";
+  card.classList.toggle("has-warning",critical===0&&total>0);
+  card.classList.toggle("is-clear",total===0);
+  list.innerHTML=active.length?active.map(x=>{
+    const cls=x.level==="critical"?"critical":x.level==="warning"?"warning":"info";
     return `<button type="button" class="attention-summary-row ${cls}" onclick="${x.action}">
       <span class="attention-summary-icon">${x.icon}</span>
-      <span class="attention-summary-text">${esc(x.text)}</span>
+      <span class="attention-summary-copy"><strong>${esc(x.text)}</strong><small>${esc(x.reason||"Click to view affected items")}</small></span>
       <span class="attention-summary-arrow">›</span>
     </button>`;
-  }).join("");
+  }).join(""): `<div class="attention-inline-clear"><span>✓</span><div><strong>No action required</strong><small>All monitored areas are currently within limits.</small></div></div>`;
 }
 
 function renderSmartHeader(){

@@ -44,10 +44,12 @@
         <h2>⚠️ Attention Required</h2>
       </div>
       <div class="attention-head-actions">
+        <span id="attentionStatus" class="attention-status clear">ALL CLEAR</span>
         <span id="attentionCount" class="attention-count">0</span>
-        <button type="button" class="attention-view-all" onclick="openNotifications()">View all</button>
+        <button type="button" class="attention-view-all" onclick="openAttentionOverview()">View all</button>
       </div>
     </div>
+    <div id="attentionMeta" class="attention-meta">Checking current plant status...</div>
     <div id="attentionList" class="attention-summary-list"></div>
   </section>
 
