@@ -31,7 +31,7 @@ function clearDismissedAlerts(){DISMISSED_ALERTS.clear();saveDismissedAlerts();r
 function clean(v){return String(v??"").trim()}
 function normalize(v){return clean(v).replace(/\s+/g," ").toUpperCase()}
 function num(v){const n=Number(v);return Number.isFinite(n)?n:null}
-function fmt(v){if(v===null||v===undefined||v==="")return"--";const n=Number(v);return Number.isFinite(n)?n.toLocaleString("en-IN",{maximumFractionDigits:2}):String(v)}
+function fmt(v){if(v===null||v===undefined||v==="")return"--";const n=Number(v);if(!Number.isFinite(n))return String(v);const safe=n===0?0:n;return safe.toLocaleString("en-IN",{maximumFractionDigits:2})}
 function fmtMT(v){return v===null||v===undefined||v===""?"--":fmt(v)+" MT"}
 function isPremixProduct(name){return /PREMIX/i.test(clean(name));}
 function isPremixMaterial(name){return isPremixProduct(name);}
@@ -1809,7 +1809,7 @@ function dqValueIntegrityIssues(){
         if(t[field]===undefined||t[field]===null||t[field]==="")return;
         const raw=num(t[field]);
         if(raw===null)out.push({kind:"NON-NUMERIC",material,date:d,transaction:ty,field,value:t[field],row:index+1});
-        else if(raw<0)out.push({kind:"NEGATIVE",material,date:d,transaction:ty,field,value:raw,row:index+1});
+        else if(raw<0 && !Object.is(raw,-0))out.push({kind:"NEGATIVE",material,date:d,transaction:ty,field,value:raw,row:index+1});
       });
     });
   });
