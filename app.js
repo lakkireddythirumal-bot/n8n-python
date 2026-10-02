@@ -846,38 +846,69 @@ function renderDashboard(){
 }
 
 
+function attentionSummaryItems(){
+  const items=[];
+  const materials=getMaterials();
+  const reorderCount=materials.filter(m=>stockStatus(num(getMaterial(m)?.closing)||0,avgConsumption(m)).status==="REORDER").length;
+  const under3Count=materials.filter(m=>{const c=num(getMaterial(m)?.closing)||0,s=stockStatus(c,avgConsumption(m));return s.cover!==null&&s.cover<3}).length;
+  const abnormalCount=abnormalConsumptionItems().length;
+
+  // Count PP-bag products whose damage is higher than the previous available day.
+  let damageIncreaseCount=0;
+  const dates=allAvailableDates().slice().sort();
+  const selected=selectedDateForIntelligence();
+  if(selected){
+    const idx=dates.indexOf(dateOnly(selected));
+    const prev=idx>0?dates[idx-1]:null;
+    if(prev){
+      const today=new Map(),yesterday=new Map();
+      selectedBags().forEach(r=>today.set(normalize(r.product||"PP Bags"),(num(r.damage)||0)));
+      const hist=Array.isArray(DATA.bagsHistory)?DATA.bagsHistory:[];
+      hist.filter(r=>dateOnly(r.report_date||r.Report_Date||r.date||r.DATE)===prev)
+        .forEach(r=>yesterday.set(normalize(r.product||"PP Bags"),(num(r.damage)||0)));
+      today.forEach((v,k)=>{if(v>(yesterday.get(k)||0))damageIncreaseCount++});
+    }else{
+      damageIncreaseCount=selectedBags().filter(r=>(num(r.damage)||0)>0).length;
+    }
+  }
+
+  const pendingOrders=(SPARE_DATA.SPARE_ORDERS||[]).filter(r=>{
+    const st=normalize(spareVal(r,['STATUS','Status','ORDER_STATUS','Order_Status']));
+    return !st || /PENDING|OPEN|ORDERED|PROCESS/.test(st);
+  }).length;
+
+  const productionRows=selectedProduction();
+  const productionIssues=productionRows.filter(r=>{const op=num(r.output_percentage);return op!==null&&op<95}).length;
+
+  items.push({icon:reorderCount?'🔴':'🟢',level:reorderCount?'critical':'clear',text:`${reorderCount} Raw Materials below reorder level`,action:"openStockForecast()"});
+  items.push({icon:under3Count?'🟡':'🟢',level:under3Count?'warning':'clear',text:`${under3Count} materials stock < 3 days`,action:"openStockForecast()"});
+  items.push({icon:abnormalCount?'🔴':'🟢',level:abnormalCount?'critical':'clear',text:`${abnormalCount} abnormal consumption`,action:"openNotifications()"});
+  items.push({icon:damageIncreaseCount?'🟡':'🟢',level:damageIncreaseCount?'warning':'clear',text:`${damageIncreaseCount} PP bag damages increased`,action:"openPPBagDetails()"});
+  items.push({icon:pendingOrders?'🔵':'🟢',level:pendingOrders?'info':'clear',text:`${pendingOrders} spare parts pending order`,action:"goSpareParts()"});
+  items.push({icon:productionIssues?'🟡':'🟢',level:productionIssues?'warning':'clear',text:productionIssues?`${productionIssues} production output below 95%`:'Production normal',action:"openProductionDetails('')"});
+  return items;
+}
+
 function renderAttentionRequired(){
   const card=document.getElementById("attentionRequiredCard");
   const list=document.getElementById("attentionList");
   const count=document.getElementById("attentionCount");
   if(!card||!list)return;
-
-  const items=managerAttentionItems();
-  const critical=items.filter(x=>x.level==="critical").length;
-  if(count){
-    count.textContent=String(items.length);
-    count.className="attention-count"+(critical?" critical":items.length?" warning":" clear");
-  }
+  const items=attentionSummaryItems();
+  const active=items.filter(x=>x.level!=="clear");
+  const critical=active.filter(x=>x.level==="critical").length;
+  if(count){count.textContent=String(active.length);count.className="attention-count"+(critical?" critical":active.length?" warning":" clear")}
   card.classList.toggle("has-critical",critical>0);
-  card.classList.toggle("has-warning",critical===0&&items.length>0);
-  card.classList.toggle("is-clear",items.length===0);
-
-  if(!items.length){
-    list.innerHTML=`<div class="attention-clear"><span>✓</span><div><strong>No immediate action</strong><small>Stock, consumption and reconciliation checks are normal for the selected date.</small></div></div>`;
-    return;
-  }
-
-  const visible=items.slice(0,4);
-  list.innerHTML=visible.map((x,i)=>{
-    const criticalLevel=x.level==="critical";
-    return `<button type="button" class="attention-item ${criticalLevel?"critical":"warning"}" onclick="${x.action||"openNotifications()"}">
-      <span class="attention-icon">${criticalLevel?"!":"•"}</span>
-      <span class="attention-copy"><strong>${esc(x.title)}</strong><small>${esc(x.msg)}</small></span>
-      <span class="attention-arrow">›</span>
+  card.classList.toggle("has-warning",critical===0&&active.length>0);
+  card.classList.toggle("is-clear",active.length===0);
+  list.innerHTML=items.map(x=>{
+    const cls=x.level==="critical"?"critical":x.level==="warning"?"warning":x.level==="info"?"info":"clear";
+    return `<button type="button" class="attention-summary-row ${cls}" onclick="${x.action}">
+      <span class="attention-summary-icon">${x.icon}</span>
+      <span class="attention-summary-text">${esc(x.text)}</span>
+      <span class="attention-summary-arrow">›</span>
     </button>`;
-  }).join("") + (items.length>visible.length
-    ? `<button type="button" class="attention-more" onclick="openNotifications()">+${items.length-visible.length} more attention item${items.length-visible.length===1?"":"s"} · View all →</button>`
-    : "");
+  }).join("");
 }
 
 function renderSmartHeader(){
