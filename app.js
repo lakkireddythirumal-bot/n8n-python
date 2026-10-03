@@ -211,21 +211,58 @@ function dcAction(kind,name){
   const action=hidden?"ACTIVE":"HIDDEN";
   if(kind==="material")dcSetMaterial(name,action,hidden?"Restored to active":"Manually hidden by manager"); else dcSetProduct(name,action,hidden?"Restored to active":"Manually hidden by manager");
 }
+let DC_LIST_FILTER="ALL";
+function dcSetListFilter(filter){
+  DC_LIST_FILTER=filter||"ALL";
+  renderDataControl();
+}
 function renderDataControl(){
   const el=document.getElementById("dataControlContent"); if(!el)return;
   const ms=dcAllMaterialNames(), ps=dcAllProductNames(), review=dcReviewItems();
   const hiddenM=ms.filter(m=>dcIsHiddenMaterial(m)).length, hiddenP=ps.filter(p=>dcIsHiddenProduct(p)).length;
-  el.innerHTML=`<div class="dc-stats"><button onclick="dcReviewModal()"><b>${review.length}</b><span>Review</span></button><button><b>${ms.length-hiddenM}</b><span>Active Materials</span></button><button><b>${hiddenM}</b><span>Hidden Materials</span></button><button><b>${ps.length-hiddenP}</b><span>Active Products</span></button><button><b>${hiddenP}</b><span>Hidden Products</span></button></div>
-  <div class="dc-toolbar"><input id="dcSearch" placeholder="Search material / product" oninput="renderDataControlLists()"><button onclick="dcReviewModal()">🔔 Review ${review.length}</button></div>
-  <div id="dcLists"></div>`;
+  const activeM=ms.length-hiddenM, activeP=ps.length-hiddenP;
+  const filter=DC_LIST_FILTER;
+  el.innerHTML=`
+    <div class="dc-overview-head">
+      <div><h3>Control overview</h3><p>Manage what appears in the dashboard without deleting source data.</p></div>
+      <button class="dc-refresh-btn" onclick="renderDataControl()">↻ Refresh</button>
+    </div>
+    <div class="dc-stats dc-stats-v2">
+      <button class="dc-stat-card ${filter==='REVIEW'?'selected':''}" onclick="dcReviewModal()"><span class="dc-stat-icon review">🔔</span><b>${review.length}</b><span>Review Required</span></button>
+      <button class="dc-stat-card ${filter==='ACTIVE_MATERIALS'?'selected':''}" onclick="dcSetListFilter('ACTIVE_MATERIALS')"><span class="dc-stat-icon active">●</span><b>${activeM}</b><span>Active Materials</span></button>
+      <button class="dc-stat-card ${filter==='HIDDEN_MATERIALS'?'selected':''}" onclick="dcSetListFilter('HIDDEN_MATERIALS')"><span class="dc-stat-icon hidden">◉</span><b>${hiddenM}</b><span>Hidden Materials</span></button>
+      <button class="dc-stat-card ${filter==='ACTIVE_PRODUCTS'?'selected':''}" onclick="dcSetListFilter('ACTIVE_PRODUCTS')"><span class="dc-stat-icon active">●</span><b>${activeP}</b><span>Active Products</span></button>
+      <button class="dc-stat-card ${filter==='HIDDEN_PRODUCTS'?'selected':''}" onclick="dcSetListFilter('HIDDEN_PRODUCTS')"><span class="dc-stat-icon hidden">◉</span><b>${hiddenP}</b><span>Hidden Products</span></button>
+    </div>
+    <div class="dc-toolbar dc-toolbar-v2">
+      <div class="dc-search-wrap"><span>⌕</span><input id="dcSearch" placeholder="Search material or product" oninput="renderDataControlLists()"></div>
+      <button class="dc-review-btn" onclick="dcReviewModal()">🔔 Review <span>${review.length}</span></button>
+      <button class="dc-clear-btn" onclick="dcSetListFilter('ALL')">Show All</button>
+    </div>
+    <div class="dc-filter-line"><span>Showing:</span><strong id="dcFilterLabel">All materials & products</strong><span class="dc-filter-count" id="dcFilterCount"></span></div>
+    <div id="dcLists"></div>`;
   renderDataControlLists();
 }
 function renderDataControlLists(){
-  const el=document.getElementById("dcLists"); if(!el)return; const q=normalize(document.getElementById("dcSearch")?.value||"");
-  const ms=dcAllMaterialNames().filter(m=>!q||normalize(m).includes(q)); const ps=dcAllProductNames().filter(p=>!q||normalize(p).includes(q));
-  const materialHtml=ms.slice(0,80).map(m=>{const s=dcMaterialState(m),hidden=s.status==="HIDDEN";return `<div class="dc-item"><div><strong>${esc(m)}</strong><small>${hidden?"HIDDEN":"ACTIVE"}${s.reason?" • "+esc(s.reason):""}</small></div><div><button onclick="dcItemReport('material','${jsq(m)}')">Report</button><button onclick="dcAction('material','${jsq(m)}')">${hidden?"Unhide":"Hide"}</button></div></div>`}).join("");
-  const productHtml=ps.slice(0,80).map(p=>{const s=dcProductState(p),hidden=s.status==="HIDDEN";return `<div class="dc-item"><div><strong>${esc(p)}</strong><small>${hidden?"HIDDEN":"ACTIVE"}${s.reason?" • "+esc(s.reason):""}</small></div><div><button onclick="dcItemReport('product','${jsq(p)}')">Report</button><button onclick="dcAction('product','${jsq(p)}')">${hidden?"Unhide":"Hide"}</button></div></div>`}).join("");
-  el.innerHTML=`<div class="dc-grid"><div><h3>📦 Materials</h3>${materialHtml||"<div class='empty'>No materials found</div>"}</div><div><h3>🌾 Products</h3>${productHtml||"<div class='empty'>No products found</div>"}</div></div>`;
+  const el=document.getElementById("dcLists"); if(!el)return;
+  const q=normalize(document.getElementById("dcSearch")?.value||"");
+  let ms=dcAllMaterialNames().filter(m=>!q||normalize(m).includes(q));
+  let ps=dcAllProductNames().filter(p=>!q||normalize(p).includes(q));
+  const filter=DC_LIST_FILTER;
+  if(filter==='ACTIVE_MATERIALS') ms=ms.filter(m=>!dcIsHiddenMaterial(m)), ps=[];
+  else if(filter==='HIDDEN_MATERIALS') ms=ms.filter(m=>dcIsHiddenMaterial(m)), ps=[];
+  else if(filter==='ACTIVE_PRODUCTS') ms=[], ps=ps.filter(p=>!dcIsHiddenProduct(p));
+  else if(filter==='HIDDEN_PRODUCTS') ms=[], ps=ps.filter(p=>dcIsHiddenProduct(p));
+  const materialHtml=ms.slice(0,120).map(m=>{const s=dcMaterialState(m),hidden=s.status==='HIDDEN';return `<div class="dc-item dc-item-v2"><div class="dc-item-main"><span class="dc-status-dot ${hidden?'hidden':'active'}"></span><div><strong title="${esc(m)}">${esc(m)}</strong><small>${hidden?'HIDDEN':'ACTIVE'}${s.reason?' • '+esc(s.reason):''}</small></div></div><div class="dc-item-actions"><button class="dc-report-btn" onclick="dcItemReport('material','${jsq(m)}')">Report</button><button class="dc-toggle-btn ${hidden?'unhide':''}" onclick="dcAction('material','${jsq(m)}')">${hidden?'Unhide':'Hide'}</button></div></div>`}).join("");
+  const productHtml=ps.slice(0,120).map(p=>{const s=dcProductState(p),hidden=s.status==='HIDDEN';return `<div class="dc-item dc-item-v2"><div class="dc-item-main"><span class="dc-status-dot ${hidden?'hidden':'active'}"></span><div><strong title="${esc(p)}">${esc(p)}</strong><small>${hidden?'HIDDEN':'ACTIVE'}${s.reason?' • '+esc(s.reason):''}</small></div></div><div class="dc-item-actions"><button class="dc-report-btn" onclick="dcItemReport('product','${jsq(p)}')">Report</button><button class="dc-toggle-btn ${hidden?'unhide':''}" onclick="dcAction('product','${jsq(p)}')">${hidden?'Unhide':'Hide'}</button></div></div>`}).join("");
+  const total=ms.length+ps.length;
+  const labels={ALL:'All materials & products',ACTIVE_MATERIALS:'Active materials',HIDDEN_MATERIALS:'Hidden materials',ACTIVE_PRODUCTS:'Active products',HIDDEN_PRODUCTS:'Hidden products'};
+  const label=document.getElementById('dcFilterLabel'), count=document.getElementById('dcFilterCount');
+  if(label)label.textContent=labels[filter]||labels.ALL;
+  if(count)count.textContent=`${total} item${total===1?'':'s'}`;
+  const materialSection=ms.length?`<section class="dc-list-section"><div class="dc-section-head"><div><span class="dc-section-icon">📦</span><div><h3>Materials</h3><small>${ms.length} shown</small></div></div></div>${materialHtml}</section>`:(filter.includes('MATERIALS')?`<section class="dc-list-section"><div class="dc-empty-list">No materials match this filter.</div></section>`:'');
+  const productSection=ps.length?`<section class="dc-list-section"><div class="dc-section-head"><div><span class="dc-section-icon">🌾</span><div><h3>Products</h3><small>${ps.length} shown</small></div></div></div>${productHtml}</section>`:(filter.includes('PRODUCTS')?`<section class="dc-list-section"><div class="dc-empty-list">No products match this filter.</div></section>`:'');
+  el.innerHTML=`<div class="dc-list-grid">${materialSection}${productSection}</div>`;
 }
 
 function clean(v){return String(v??"").trim()}
