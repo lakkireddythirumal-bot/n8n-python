@@ -39,6 +39,11 @@
   </div>
 
   <!-- ATTENTION REQUIRED -->
+  <section class="card data-control-card" id="dataControlSection">
+    <div class="card-title"><div><h2>🛡 Data Control Center</h2><span>Hide • Review • Exclude • Reconcile • Restore</span></div><button class="report-view-btn" onclick="dcReviewModal()">🔔 Review</button></div>
+    <div id="dataControlContent"><div class="empty">Loading data controls...</div></div>
+  </section>
+
   <section class="attention-card" id="attentionRequiredCard" aria-live="polite">
     <div class="attention-head">
       <div>
@@ -322,7 +327,6 @@
     <div class="nav-item" onclick="openPPBagDetails()"><div>🛍</div>PP Bags</div>
     <div class="nav-item" onclick="goSpareParts()"><div>🔧</div>Spares</div>
     <div class="nav-item" onclick="goTrend()"><div>📊</div>Reports</div>
-    <div class="nav-item" onclick="openDataControlCenter()"><div>🛡</div>Data</div>
   </div>
 </div>
 
