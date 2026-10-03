@@ -293,27 +293,41 @@ function renderDataControl(){
   const hiddenM=ms.filter(m=>dcIsHiddenMaterial(m)).length, hiddenP=ps.filter(p=>dcIsHiddenProduct(p)).length;
   const activeM=ms.length-hiddenM, activeP=ps.length-hiddenP;
   const filter=DC_LIST_FILTER;
+  const labels={ALL:'All items',ACTIVE_MATERIALS:'Active materials',HIDDEN_MATERIALS:'Hidden materials',ACTIVE_PRODUCTS:'Active products',HIDDEN_PRODUCTS:'Hidden products'};
   el.innerHTML=`
-    <div class="dc-overview-head">
-      <div><h3>Control overview</h3><p>Manage what appears in the dashboard without deleting source data.</p></div>
-      <button class="dc-refresh-btn" onclick="renderDataControl()">↻ Refresh</button>
-    </div>
-    <div class="dc-stats dc-stats-v2">
-      <button class="dc-stat-card ${filter==='REVIEW'?'selected':''}" onclick="dcReviewModal()"><span class="dc-stat-icon review">🔔</span><b>${review.length}</b><span>Review Required</span></button>
-      <button class="dc-stat-card ${filter==='ACTIVE_MATERIALS'?'selected':''}" onclick="dcSetListFilter('ACTIVE_MATERIALS')"><span class="dc-stat-icon active">●</span><b>${activeM}</b><span>Active Materials</span></button>
-      <button class="dc-stat-card ${filter==='HIDDEN_MATERIALS'?'selected':''}" onclick="dcSetListFilter('HIDDEN_MATERIALS')"><span class="dc-stat-icon hidden">◉</span><b>${hiddenM}</b><span>Hidden Materials</span></button>
-      <button class="dc-stat-card ${filter==='ACTIVE_PRODUCTS'?'selected':''}" onclick="dcSetListFilter('ACTIVE_PRODUCTS')"><span class="dc-stat-icon active">●</span><b>${activeP}</b><span>Active Products</span></button>
-      <button class="dc-stat-card ${filter==='HIDDEN_PRODUCTS'?'selected':''}" onclick="dcSetListFilter('HIDDEN_PRODUCTS')"><span class="dc-stat-icon hidden">◉</span><b>${hiddenP}</b><span>Hidden Products</span></button>
-    </div>
-    <div class="dc-toolbar dc-toolbar-v2">
-      <div class="dc-search-wrap"><span>⌕</span><input id="dcSearch" placeholder="Search material or product" oninput="renderDataControlLists()"></div>
-      <button class="dc-review-btn" onclick="dcReviewModal()">🔔 Review <span>${review.length}</span></button>
-      <button class="dc-clear-btn" onclick="dcSetListFilter('ALL')">Show All</button>
-    </div>
-    <div class="dc-filter-line"><span>Showing:</span><strong id="dcFilterLabel">All materials & products</strong><span class="dc-filter-count" id="dcFilterCount"></span></div>
-    <div id="dcLists"></div>`;
+    <div class="dc-shell">
+      <div class="dc-hero">
+        <div class="dc-hero-copy">
+          <div class="dc-hero-icon">🛡</div>
+          <div><div class="dc-page-kicker">DATA GOVERNANCE</div><h3>Control what the dashboard uses</h3><p>Hide inactive items, review exceptions and keep every decision reversible.</p></div>
+        </div>
+        <div class="dc-hero-actions"><button class="dc-hero-refresh" onclick="renderDataControl()">↻ Refresh</button><button class="dc-hero-review ${review.length?'has-alert':''}" onclick="dcReviewModal()">🔔 Review <b>${review.length}</b></button></div>
+      </div>
+
+      <div class="dc-health-strip">
+        <div><span class="dc-health-dot ${review.length?'alert':'ok'}"></span><div><strong>${review.length?review.length+' review item'+(review.length===1?'':'s')+' need attention':'Data control is clear'}</strong><small>${review.length?'Only changed or unexplained data is waiting for a manager decision.':'No new data-control decision is waiting.'}</small></div></div>
+        <button onclick="dcReviewModal()">Open review queue <span>›</span></button>
+      </div>
+
+      <div class="dc-section-label"><span>CONTROLLED DATA</span><small>Tap a card to filter the list</small></div>
+      <div class="dc-stats-v3">
+        <button class="dc-stat-v3 review ${review.length?'alert':''}" onclick="dcReviewModal()"><span class="dc-v3-icon">🔔</span><strong>${review.length}</strong><small>Review Required</small><i>›</i></button>
+        <button class="dc-stat-v3" onclick="dcSetListFilter('ACTIVE_MATERIALS')"><span class="dc-v3-icon green">●</span><strong>${activeM}</strong><small>Active Materials</small><i>›</i></button>
+        <button class="dc-stat-v3" onclick="dcSetListFilter('HIDDEN_MATERIALS')"><span class="dc-v3-icon gray">◉</span><strong>${hiddenM}</strong><small>Hidden Materials</small><i>›</i></button>
+        <button class="dc-stat-v3" onclick="dcSetListFilter('ACTIVE_PRODUCTS')"><span class="dc-v3-icon green">●</span><strong>${activeP}</strong><small>Active Products</small><i>›</i></button>
+        <button class="dc-stat-v3" onclick="dcSetListFilter('HIDDEN_PRODUCTS')"><span class="dc-v3-icon gray">◉</span><strong>${hiddenP}</strong><small>Hidden Products</small><i>›</i></button>
+      </div>
+
+      <div class="dc-list-toolbar-v3">
+        <div class="dc-search-wrap-v3"><span>⌕</span><input id="dcSearch" placeholder="Search materials or products" oninput="renderDataControlLists()"></div>
+        <div class="dc-filter-pills"><button class="${filter==='ALL'?'active':''}" onclick="dcSetListFilter('ALL')">All</button><button class="${filter.includes('MATERIALS')?'active':''}" onclick="dcSetListFilter('ACTIVE_MATERIALS')">Materials</button><button class="${filter.includes('PRODUCTS')?'active':''}" onclick="dcSetListFilter('ACTIVE_PRODUCTS')">Products</button></div>
+      </div>
+      <div class="dc-current-filter"><span>Showing <strong id="dcFilterLabel">${labels[filter]||labels.ALL}</strong></span><span id="dcFilterCount"></span></div>
+      <div id="dcLists"></div>
+    </div>`;
   renderDataControlLists();
 }
+
 function renderDataControlLists(){
   const el=document.getElementById("dcLists"); if(!el)return;
   const q=normalize(document.getElementById("dcSearch")?.value||"");
@@ -1258,7 +1272,7 @@ function attentionSummaryItems(){
   items.push({icon:spareRows.length?'🔵':'🟢',level:spareRows.length?'info':'clear',count:spareRows.length,text:`${spareRows.length} spare orders pending`,reason:spareRows.length?"Open / pending spare orders need follow-up":"No pending spare orders",action:"openAttentionFiltered('spares')"});
   items.push({icon:productionRows.length?'🟡':'🟢',level:productionRows.length?'warning':'clear',count:productionRows.length,text:productionRows.length?`${productionRows.length} production outputs below 95%`:'Production output normal',reason:productionRows.length?"Output percentage is below the 95% threshold":"All selected production records are ≥ 95%",action:"openAttentionFiltered('production')"});
   const dcReviews=dcReviewItems();
-  items.push({icon:dcReviews.length?'🔴':'🟢',level:dcReviews.length?'critical':'clear',count:dcReviews.length,text:dcReviews.length?`${dcReviews.length} data review item${dcReviews.length===1?"":"s"}: hidden / unexplained / changed`:"Data control clear",reason:dcReviews.length?"Manager review is required before accepting the affected data":"No new data-control review required",action:"dcReviewModal()"});
+  items.push({icon:dcReviews.length?'🔴':'🟢',level:dcReviews.length?'critical':'clear',count:dcReviews.length,text:dcReviews.length?`${dcReviews.length} data review item${dcReviews.length===1?"":"s"}: hidden / unexplained / changed`:"Data control clear",reason:dcReviews.length?"Manager review is required before accepting the affected data":"No new data-control review required",action:"closeModal();openDataControlPage();dcReviewModal()"});
   return items;
 }
 
