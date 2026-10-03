@@ -50,11 +50,19 @@ function dcRecordKey(material,t){
   return dcKey([material,dateOnly(rowDate(t)),tType(t),tVal(t),clean(t.for_day),clean(t.for_month),clean(t.for_year)].join("|"));
 }
 function dcRecordState(material,t){return DATA_CONTROL.records[dcRecordKey(material,t)]||null}
-function dcRefreshUI(){
+function dcRefreshUI(message, tone="success"){
+  // Render the control-center state first so the clicked button updates immediately.
   try{renderDataControl();}catch(e){console.warn("Data control refresh failed",e)}
-  try{renderDashboard();}catch(e){console.warn("Dashboard refresh failed",e)}
-  const overlay=document.getElementById("dcReviewOverlay");
-  if(overlay && overlay.classList.contains("show")) setTimeout(()=>renderDcReviewOverlay(),0);
+  try{renderDcReviewOverlay();}catch(e){}
+  try{renderDcReportIfOpen();}catch(e){}
+  if(message) dcToast(message,tone);
+  // Dashboard calculations refresh after the control UI has visibly updated.
+  setTimeout(()=>{try{invalidatePerfCache(); renderDashboard();}catch(e){console.warn("Dashboard refresh failed",e)}},0);
+}
+function dcToast(message,tone="success"){
+  const el=document.getElementById("dcToast"); if(!el)return;
+  el.textContent=message; el.className="dc-toast show "+tone;
+  clearTimeout(dcToast._timer); dcToast._timer=setTimeout(()=>el.classList.remove("show"),2200);
 }
 function closeDcReview(){
   const overlay=document.getElementById("dcReviewOverlay");
@@ -66,15 +74,15 @@ function dcReviewOverlayOutside(e){if(e.target&&e.target.id==="dcReviewOverlay")
 function dcSetMaterial(name,status,reason){
   const k=dcKey(name), now=new Date().toISOString(), base={status,reason:clean(reason),updatedAt:now};
   if(status==="HIDDEN"){const rows=dcMaterialActivity(name);base.activityAck=rows.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort().pop()||"";}
-  DATA_CONTROL.materials[k]=base; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
+  DATA_CONTROL.materials[k]=base; saveDataControl(); invalidatePerfCache(); dcRefreshUI(`${name}: ${status==="HIDDEN"?"Hidden":"Active"}`);
 }
 function dcSetProduct(name,status,reason){
   const k=dcKey(name), now=new Date().toISOString(), base={status,reason:clean(reason),updatedAt:now};
   if(status==="HIDDEN"){const rows=[...(DATA.production||[]),...(DATA.productionHistory||[]),...(DATA.feedUnitData||[]),...(DATA.bags||[]),...(DATA.bagsHistory||[])].filter(r=>normalize(r.product||r.Product)===normalize(name));base.activityAck=rows.map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean).sort().pop()||"";}
-  DATA_CONTROL.products[k]=base; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
+  DATA_CONTROL.products[k]=base; saveDataControl(); invalidatePerfCache(); dcRefreshUI(`${name}: ${status==="HIDDEN"?"Hidden":"Active"}`);
 }
 function dcSetRecord(material,t,status,reason){
-  const k=dcRecordKey(material,t); DATA_CONTROL.records[k]={status,reason:clean(reason),updatedAt:new Date().toISOString()}; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
+  const k=dcRecordKey(material,t); DATA_CONTROL.records[k]={status,reason:clean(reason),updatedAt:new Date().toISOString()}; saveDataControl(); invalidatePerfCache(); dcRefreshUI(`${material}: ${status==="EXCLUDED"?"Record excluded":"Record restored"}`);
 }
 function dcReviewExcludedRecord(material,t,keep){
   const k=dcRecordKey(material,t), old=DATA_CONTROL.records[k]||{};
@@ -83,13 +91,13 @@ function dcReviewExcludedRecord(material,t,keep){
 }
 function dcReviewHiddenMaterial(material,keep){
   const rows=dcMaterialActivity(material), latest=rows.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort().pop()||"";
-  if(keep){const k=dcKey(material),st=dcMaterialState(material); DATA_CONTROL.materials[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); dcRefreshUI();}
+  if(keep){const k=dcKey(material),st=dcMaterialState(material); DATA_CONTROL.materials[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); dcRefreshUI(`${material}: kept hidden`); }
   else dcSetMaterial(material,"ACTIVE","Activity detected — reviewed");
 }
 function dcReviewHiddenProduct(product,keep){
   const rows=[...(DATA.production||[]),...(DATA.productionHistory||[]),...(DATA.feedUnitData||[]),...(DATA.bags||[]),...(DATA.bagsHistory||[])].filter(r=>normalize(r.product||r.Product)===normalize(product));
   const latest=rows.map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean).sort().pop()||"";
-  if(keep){const k=dcKey(product),st=dcProductState(product); DATA_CONTROL.products[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); dcRefreshUI();}
+  if(keep){const k=dcKey(product),st=dcProductState(product); DATA_CONTROL.products[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); dcRefreshUI(`${product}: kept hidden`); }
   else dcSetProduct(product,"ACTIVE","Activity detected — reviewed");
 }
 function dcIsExcluded(material,t){const s=dcRecordState(material,t);return s&&s.status==="EXCLUDED"}
@@ -191,7 +199,7 @@ function dcApplyUnexplainedDecision(item,action){
       DATA_CONTROL.records[k]={status:action==="EXCLUDED"?"EXCLUDED":"KEPT",reason:action==="EXCLUDED"?"Unexplained consumption — excluded by manager":"Unexplained consumption — reviewed and kept",updatedAt:new Date().toISOString(),reviewAck:action==="EXCLUDED"?"":""};
     });
   }
-  const st=dcMaterialState(m); st.unexplainedSignature=sig; st.unexplainedDecision=action; DATA_CONTROL.materials[dcKey(m)]=st; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
+  const st=dcMaterialState(m); st.unexplainedSignature=sig; st.unexplainedDecision=action; DATA_CONTROL.materials[dcKey(m)]=st; saveDataControl(); invalidatePerfCache(); dcRefreshUI(`${m}: ${action==="EXCLUDED"?"unexplained consumption excluded":"consumption kept"}`);
 }
 function dcSetRecordByIndex(material,index,status,reason){const rows=dcRawTransactions(material);const t=rows[index];if(t)dcSetRecord(material,t,status,reason);}
 function openDataControlPage(){
@@ -234,19 +242,41 @@ function dcReviewModal(){
   renderDcReviewOverlay();
 }
 
+function dcReportOverlayOutside(e){if(e.target&&e.target.id==="dcReportOverlay")closeDcReport()}
+function closeDcReport(){const o=document.getElementById("dcReportOverlay");if(!o)return;o.classList.remove("show");o.setAttribute("aria-hidden","true")}
+let DC_REPORT_STATE=null;
 function dcItemReport(kind,name){
-  const isMat=kind==="material", st=isMat?dcMaterialState(name):dcProductState(name);
-  let html=`<div class="detail-section"><h3>${esc(name)}</h3>${detail("Control Status",st.status||"ACTIVE")}${st.reason?detail("Reason",st.reason):""}${st.updatedAt?detail("Last Decision",new Date(st.updatedAt).toLocaleString("en-IN")):""}</div>`;
+  DC_REPORT_STATE={kind,name};
+  renderDcReport();
+  const o=document.getElementById("dcReportOverlay"); if(!o)return;
+  o.classList.add("show");o.setAttribute("aria-hidden","false");
+}
+function renderDcReportIfOpen(){const o=document.getElementById("dcReportOverlay");if(o&&o.classList.contains("show"))renderDcReport()}
+function dcReportRow(label,value,cls=""){return `<div class="dc-report-kv ${cls}"><span>${esc(label)}</span><strong>${esc(value==null||value===""?"--":String(value))}</strong></div>`}
+function dcReportStatusBadge(status){const s=String(status||"ACTIVE");const c=s==="HIDDEN"?"hidden":s==="EXCLUDED"?"excluded":s==="MISMATCH"?"danger":s==="MATCH"?"match":"active";return `<span class="dc-report-status ${c}">${esc(s)}</span>`}
+function dcReportRecordsTable(name,raw){
+  if(!raw.length)return `<div class="dc-report-empty">No source records found.</div>`;
+  return `<div class="dc-report-table-wrap"><table class="dc-report-table"><thead><tr><th>Date</th><th>Activity</th><th>Qty</th><th>Status</th><th></th></tr></thead><tbody>${raw.map((t,i)=>{const ex=dcIsExcluded(name,t);return `<tr class="${ex?'is-excluded':''}"><td>${esc(dateOnly(rowDate(t))||"--")}</td><td>${esc(tType(t)||"Movement")}</td><td>${esc(fmt(tVal(t)))}</td><td>${ex?'<span class="mini-status excluded">EXCLUDED</span>':'<span class="mini-status approved">APPROVED</span>'}</td><td><button class="dc-mini-btn" onclick="dcSetRecordByIndex('${jsq(name)}',${i},'${ex?'KEPT':'EXCLUDED'}','Manager report action')">${ex?'Restore':'Exclude'}</button></td></tr>`}).join("")}</tbody></table></div>`
+}
+function renderDcReport(){
+  const body=document.getElementById("dcReportContent"),title=document.getElementById("dcReportTitle"),sub=document.getElementById("dcReportSubtitle");
+  if(!body||!DC_REPORT_STATE)return;
+  const {kind,name}=DC_REPORT_STATE, isMat=kind==="material", st=isMat?dcMaterialState(name):dcProductState(name);
+  if(title)title.textContent=name;
+  if(sub)sub.textContent=isMat?"Material control, reconciliation and transaction history":"Product control and activity history";
   if(isMat){
-    const raw=dcRawTransactions(name), approved=dcApprovedTransactions(name), rec=dcLatestRawReconciliation(name);
-    html+=`<div class="detail-section"><h3>🔎 Reconciliation</h3>${detail("Result",rec.status)}${detail("Date",rec.date||"--")}${detail("Opening",fmt(rec.opening))}${detail("Additions",fmt(rec.add))}${detail("Other Out",fmt(rec.out))}${detail("Consumption",fmt(rec.cons))}${detail("Closing",fmt(rec.closing))}${detail("Difference",fmt(rec.diff))}${detail("Unexplained",rec.unexplained?"YES":"NO")}</div>`;
-    html+=`<div class="detail-section"><h3>📋 Records • Raw ${raw.length} / Approved ${approved.length}</h3>${raw.map(t=>{const ex=dcIsExcluded(name,t);return `<div class="dc-record ${ex?"excluded":""}"><div><strong>${esc(tType(t)||"Movement")}</strong><small>${esc(rowDate(t))}</small></div><div><strong>${fmt(tVal(t))}</strong><small>${ex?"EXCLUDED":"APPROVED"}</small><button onclick="dcSetRecordByIndex('${jsq(name)}',${raw.indexOf(t)},'${ex?'KEPT':'EXCLUDED'}','Manager review')">${ex?'Restore':'Exclude'}</button></div></div>`}).join("")||"<div class='empty'>No records</div>"}</div>`;
+    const raw=dcRawTransactions(name),approved=dcApprovedTransactions(name),rec=dcLatestRawReconciliation(name);
+    const totalCons=approved.filter(t=>tType(t).includes("CONSUMPTION")||tType(t).includes("CONSUMPION")).reduce((a,t)=>a+tVal(t),0);
+    body.innerHTML=`<div class="dc-report-summary"><div class="dc-report-summary-main"><div class="dc-report-eyebrow">CONTROL STATUS</div><div>${dcReportStatusBadge(st.status)}</div><p>${esc(st.reason||"No manager decision recorded.")}</p></div><div class="dc-report-summary-actions"><button class="dc-report-action primary" onclick="dcAction('material','${jsq(name)}')">${st.status==='HIDDEN'?'Unhide Material':'Hide Material'}</button><button class="dc-report-action" onclick="closeDcReport();dcReviewModal()">🔔 Review</button></div></div>
+      <div class="dc-report-grid"><section class="dc-report-section"><div class="dc-report-section-head"><span>🔎</span><div><h4>Latest Reconciliation</h4><small>${esc(rec.date||"No date")}</small></div></div><div class="dc-report-kv-grid">${dcReportRow("Result",rec.status)}${dcReportRow("Opening",fmt(rec.opening))}${dcReportRow("Additions",fmt(rec.add))}${dcReportRow("Other Out",fmt(rec.out))}${dcReportRow("Consumption",fmt(rec.cons))}${dcReportRow("Closing",fmt(rec.closing))}${dcReportRow("Difference",fmt(rec.diff))}${dcReportRow("Unexplained",rec.unexplained?"YES":"NO",rec.unexplained?"danger":"")}</div></section><section class="dc-report-section"><div class="dc-report-section-head"><span>📊</span><div><h4>Data Summary</h4><small>Current control state</small></div></div><div class="dc-report-kv-grid">${dcReportRow("Raw records",raw.length)}${dcReportRow("Approved records",approved.length)}${dcReportRow("Excluded records",raw.length-approved.length)}${dcReportRow("Approved consumption",fmt(totalCons))}${dcReportRow("Last decision",st.updatedAt?new Date(st.updatedAt).toLocaleString("en-IN"):"--")}</div></section></div>
+      <section class="dc-report-section"><div class="dc-report-section-head"><span>📋</span><div><h4>Source Records</h4><small>Every record and its current decision</small></div></div>${dcReportRecordsTable(name,raw)}</section>`;
   }else{
     const rows=[...(DATA.production||[]),...(DATA.productionHistory||[]),...(DATA.feedUnitData||[]),...(DATA.bags||[]),...(DATA.bagsHistory||[])].filter(r=>normalize(r.product||r.Product)===normalize(name));
-    html+=`<div class="detail-section"><h3>📋 Product Records • ${rows.length}</h3>${rows.map(r=>`<div class="dc-record"><div><strong>${esc(r.Product||r.product||name)}</strong><small>${esc(dateOnly(r.Report_Date||r.report_date)||"--")}</small></div><div><strong>${fmt(r.Production_Day_MT??r.production_day_mt??r.actual_output)}</strong><small>Production</small></div></div>`).join("")||"<div class='empty'>No records</div>"}</div>`;
+    const activeRows=rows.filter(r=>Object.entries(r).some(([k,v])=>!/(product|report_date|date)/i.test(k)&&num(v)!==null&&num(v)!==0));
+    body.innerHTML=`<div class="dc-report-summary"><div class="dc-report-summary-main"><div class="dc-report-eyebrow">CONTROL STATUS</div><div>${dcReportStatusBadge(st.status)}</div><p>${esc(st.reason||"No manager decision recorded.")}</p></div><div class="dc-report-summary-actions"><button class="dc-report-action primary" onclick="dcAction('product','${jsq(name)}')">${st.status==='HIDDEN'?'Unhide Product':'Hide Product'}</button><button class="dc-report-action" onclick="closeDcReport();dcReviewModal()">🔔 Review</button></div></div><div class="dc-report-grid"><section class="dc-report-section"><div class="dc-report-section-head"><span>📊</span><div><h4>Activity Summary</h4><small>Detected product records</small></div></div><div class="dc-report-kv-grid">${dcReportRow("Total source records",rows.length)}${dcReportRow("Records with activity",activeRows.length)}${dcReportRow("Last decision",st.updatedAt?new Date(st.updatedAt).toLocaleString("en-IN"):"--")}${dcReportRow("Activity acknowledgement",st.activityAck||"--")}</div></section></div><section class="dc-report-section"><div class="dc-report-section-head"><span>📋</span><div><h4>Product Activity</h4><small>Latest source rows</small></div></div><div class="dc-report-table-wrap"><table class="dc-report-table"><thead><tr><th>Date</th><th>Product</th><th>Output</th><th>Dispatch</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(dateOnly(r.Report_Date||r.report_date||r.date)||"--")}</td><td>${esc(r.Product||r.product||name)}</td><td>${esc(fmt(feedField(r,"Production_Day_MT")))}</td><td>${esc(fmt(feedField(r,"Dispatch_Day_MT")))}</td></tr>`).join("")||`<tr><td colspan="4">No records found.</td></tr>`}</tbody></table></div></section>`;
   }
-  showModal(name,html);
 }
+
 function dcAction(kind,name){
   const hidden=(kind==="material"?dcMaterialState(name):dcProductState(name)).status==="HIDDEN";
   const action=hidden?"ACTIVE":"HIDDEN";
