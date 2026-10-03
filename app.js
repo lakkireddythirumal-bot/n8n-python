@@ -219,27 +219,52 @@ function closeDataControlPage(){
   document.body.classList.remove("dc-page-open");
 }
 
-function renderDcReviewOverlay(){
+function dcReviewTypeLabel(type){
+  return ({HIDDEN_ACTIVITY:"HIDDEN ITEM ACTIVITY",HIDDEN_PRODUCT_ACTIVITY:"HIDDEN ITEM ACTIVITY",UNEXPLAINED_CONSUMPTION:"SUSPICIOUS ACTIVITY",DUPLICATE_RECORD:"DUPLICATE",EXCLUDED_RECONCILIATION:"RECONCILIATION CHANGED"}[type]||String(type||"").replace(/_/g," "));
+}
+function dcReviewItemsByFilter(filter){
+  const all=dcReviewItems();
+  if(!filter||filter==='ALL')return all;
+  const map={HIDDEN:new Set(['HIDDEN_ACTIVITY','HIDDEN_PRODUCT_ACTIVITY']),SUSPICIOUS:new Set(['UNEXPLAINED_CONSUMPTION']),DUPLICATE:new Set(['DUPLICATE_RECORD']),CHANGED:new Set(['EXCLUDED_RECONCILIATION'])};
+  return all.filter(x=>map[filter]?.has(x.type));
+}
+function dcReviewActionButtons(x){
+  if(x.type==='HIDDEN_ACTIVITY') return `<button type="button" class="dc-decision-primary" onclick="dcReviewHiddenMaterial('${jsq(x.item)}',false)">Unhide</button><button type="button" class="dc-decision-secondary" onclick="dcReviewHiddenMaterial('${jsq(x.item)}',true)">Keep Hidden</button>`;
+  if(x.type==='HIDDEN_PRODUCT_ACTIVITY') return `<button type="button" class="dc-decision-primary" onclick="dcReviewHiddenProduct('${jsq(x.item)}',false)">Unhide</button><button type="button" class="dc-decision-secondary" onclick="dcReviewHiddenProduct('${jsq(x.item)}',true)">Keep Hidden</button>`;
+  if(x.type==='UNEXPLAINED_CONSUMPTION') return `<button type="button" class="dc-decision-primary" onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','EXCLUDED')">Exclude Activity</button><button type="button" class="dc-decision-secondary" onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','KEPT')">Keep Activity</button>`;
+  if(x.type==='DUPLICATE_RECORD') return `<button type="button" class="dc-decision-primary" onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'EXCLUDED','Duplicate — excluded by manager')">Exclude Duplicate</button><button type="button" class="dc-decision-secondary" onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'KEPT','Duplicate reviewed — keep')">Keep Record</button>`;
+  return `<button type="button" class="dc-decision-primary" onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{}).replace(/</g,"\\u003c")},false)">Restore Record</button><button type="button" class="dc-decision-secondary" onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{}).replace(/</g,"\\u003c")},true)">Keep Excluded</button>`;
+}
+function dcOpenReviewDecision(index,filter='ALL'){
+  const items=dcReviewItemsByFilter(filter), x=items[index];
+  const content=document.getElementById('dcReviewContent'); if(!content||!x)return;
+  content.innerHTML=`<article class="dc-review-focus ${x.level}">
+    <div class="dc-review-focus-head"><span class="dc-badge">${esc(dcReviewTypeLabel(x.type))}</span><button type="button" class="dc-back-review" onclick="dcReviewModal('${jsq(filter)}')">← Review queue</button></div>
+    <h4>${esc(x.item)}</h4>
+    <div class="dc-review-focus-reason">${esc(x.reason)}</div>
+    <div class="dc-review-focus-detail">${esc(x.detail||'')}</div>
+    <div class="dc-review-evidence"><div><span>Category</span><strong>${esc(dcReviewTypeLabel(x.type))}</strong></div><div><span>Decision</span><strong>Manager review required</strong></div></div>
+    <div class="dc-actions dc-actions-focus">${dcReviewActionButtons(x)}</div>
+  </article>`;
+}
+function renderDcReviewOverlay(filter='ALL'){
   const overlay=document.getElementById("dcReviewOverlay"), content=document.getElementById("dcReviewContent"), subtitle=document.getElementById("dcReviewSubtitle");
   if(!overlay||!content)return;
-  const items=dcReviewItems();
-  if(subtitle) subtitle.textContent=items.length?`${items.length} item${items.length===1?"":"s"} need manager review`:"No new review items detected";
+  const items=dcReviewItemsByFilter(filter);
+  if(subtitle) subtitle.textContent=items.length?`${items.length} ${filter==='ALL'?'item':'filtered item'}${items.length===1?'':'s'} need manager review`:'No new review items detected';
   if(!items.length){
-    content.innerHTML=`<div class="dc-review-empty"><div class="dc-review-empty-icon">✓</div><h4>Everything is reviewed</h4><p>No new hidden-item activity, unexplained consumption, duplicate or changed reconciliation decision needs attention.</p><button type="button" class="dc-primary-action" onclick="closeDcReview()">Done</button></div>`;
+    content.innerHTML=`<div class="dc-review-empty"><div class="dc-review-empty-icon">✓</div><h4>Everything is reviewed</h4><p>No ${filter==='ALL'?'new data-control':''} item in this category needs a decision.</p><button type="button" class="dc-primary-action" onclick="closeDcReview()">Done</button></div>`;
     return;
   }
-  content.innerHTML=`<div class="dc-review-list">${items.map((x,i)=>`<article class="dc-review-item ${x.level}">
-    <div class="dc-review-top"><span class="dc-badge">${esc(x.type.replace(/_/g," "))}</span><strong>${esc(x.item)}</strong></div>
-    <div class="dc-review-reason">${esc(x.reason)}</div>
-    <div class="dc-review-detail">${esc(x.detail||"")}</div>
-    <div class="dc-actions">${x.type==="HIDDEN_ACTIVITY"?`<button type="button" onclick="dcReviewHiddenMaterial('${jsq(x.item)}',false)">Unhide</button><button type="button" onclick="dcReviewHiddenMaterial('${jsq(x.item)}',true)">Keep Hidden</button>`:x.type==="HIDDEN_PRODUCT_ACTIVITY"?`<button type="button" onclick="dcReviewHiddenProduct('${jsq(x.item)}',false)">Unhide</button><button type="button" onclick="dcReviewHiddenProduct('${jsq(x.item)}',true)">Keep Hidden</button>`:x.type==="UNEXPLAINED_CONSUMPTION"?`<button type="button" onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','EXCLUDED')">Exclude</button><button type="button" onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','KEPT')">Keep</button>`:x.type==="DUPLICATE_RECORD"?`<button type="button" onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'EXCLUDED','Duplicate — excluded by manager')">Exclude Duplicate</button><button type="button" onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'KEPT','Duplicate reviewed — keep')">Keep</button>`:`<button type="button" onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{}).replace(/</g,"\u003c")},false)">Restore</button><button type="button" onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{}).replace(/</g,"\u003c")},true)">Keep Excluded</button>`}</div>
-  </article>`).join("")}</div>`;
+  content.innerHTML=`<div class="dc-review-filterbar"><span>Review queue</span><span>${items.length} pending</span></div><div class="dc-review-list">${items.map((x,i)=>`<article class="dc-review-item ${x.level}">
+    <div class="dc-review-top"><span class="dc-badge">${esc(dcReviewTypeLabel(x.type))}</span><strong>${esc(x.item)}</strong></div>
+    <div class="dc-review-reason">${esc(x.reason)}</div><div class="dc-review-detail">${esc(x.detail||"")}</div>
+    <div class="dc-actions"><button type="button" class="dc-review-open" onclick="dcOpenReviewDecision(${i},'${jsq(filter)}')">Review</button></div>
+  </article>`).join('')}</div>`;
 }
-function dcReviewModal(){
-  const overlay=document.getElementById("dcReviewOverlay");
-  if(!overlay)return;
-  overlay.classList.add("show"); overlay.setAttribute("aria-hidden","false");
-  renderDcReviewOverlay();
+function dcReviewModal(filter='ALL'){
+  const overlay=document.getElementById("dcReviewOverlay"); if(!overlay)return;
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden","false"); renderDcReviewOverlay(filter);
 }
 
 function dcReportOverlayOutside(e){if(e.target&&e.target.id==="dcReportOverlay")closeDcReport()}
@@ -1272,7 +1297,14 @@ function attentionSummaryItems(){
   items.push({icon:spareRows.length?'🔵':'🟢',level:spareRows.length?'info':'clear',count:spareRows.length,text:`${spareRows.length} spare orders pending`,reason:spareRows.length?"Open / pending spare orders need follow-up":"No pending spare orders",action:"openAttentionFiltered('spares')"});
   items.push({icon:productionRows.length?'🟡':'🟢',level:productionRows.length?'warning':'clear',count:productionRows.length,text:productionRows.length?`${productionRows.length} production outputs below 95%`:'Production output normal',reason:productionRows.length?"Output percentage is below the 95% threshold":"All selected production records are ≥ 95%",action:"openAttentionFiltered('production')"});
   const dcReviews=dcReviewItems();
-  items.push({icon:dcReviews.length?'🔴':'🟢',level:dcReviews.length?'critical':'clear',count:dcReviews.length,text:dcReviews.length?`${dcReviews.length} data review item${dcReviews.length===1?"":"s"}: hidden / unexplained / changed`:"Data control clear",reason:dcReviews.length?"Manager review is required before accepting the affected data":"No new data-control review required",action:"closeModal();openDataControlPage();dcReviewModal()"});
+  const dcHidden=dcReviews.filter(x=>x.type==="HIDDEN_ACTIVITY"||x.type==="HIDDEN_PRODUCT_ACTIVITY").length;
+  const dcSuspicious=dcReviews.filter(x=>x.type==="UNEXPLAINED_CONSUMPTION").length;
+  const dcDuplicates=dcReviews.filter(x=>x.type==="DUPLICATE_RECORD").length;
+  const dcChanged=dcReviews.filter(x=>x.type==="EXCLUDED_RECONCILIATION").length;
+  if(dcHidden) items.push({icon:'🟠',level:'warning',count:dcHidden,text:`${dcHidden} hidden item${dcHidden===1?'':'s'} with activity`,reason:'A hidden material or product has new recorded activity',action:"closeModal();openDataControlPage();dcReviewModal('HIDDEN')"});
+  if(dcSuspicious) items.push({icon:'🔴',level:'critical',count:dcSuspicious,text:`${dcSuspicious} suspicious activity`,reason:'Activity has no supporting opening / receipt / transfer',action:"closeModal();openDataControlPage();dcReviewModal('SUSPICIOUS')"});
+  if(dcDuplicates) items.push({icon:'🟡',level:'warning',count:dcDuplicates,text:`${dcDuplicates} duplicate record${dcDuplicates===1?'':'s'} detected`,reason:'Only identical transaction signatures are classified as duplicates',action:"closeModal();openDataControlPage();dcReviewModal('DUPLICATE')"});
+  if(dcChanged) items.push({icon:'🔄',level:'warning',count:dcChanged,text:`${dcChanged} excluded record reconciliation changed`,reason:'A previously excluded record now needs reconsideration',action:"closeModal();openDataControlPage();dcReviewModal('CHANGED')"});
   return items;
 }
 
