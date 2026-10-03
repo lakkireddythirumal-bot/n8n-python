@@ -17,6 +17,7 @@
     <div><div class="smart-greeting" id="smartGreeting">GOOD MORNING, SIR</div><div class="smart-title"><h1>Feed Plant Control Center</h1></div><p><span id="reportDate">Latest</span></p><span class="selected-date-chip" id="selectedDateChip">Latest</span></div>
     <div class="header-actions">
       <button class="header-tool" onclick="openGlobalSearch()" aria-label="Search">🔎</button>
+      <button class="header-tool" onclick="openDataControlPage()" aria-label="Data settings">⚙️</button>
       <button class="header-tool plant-ai-btn" onclick="openPlantAI()" aria-label="Plant AI">🤖</button>
       <button class="header-tool" onclick="openDateSelector()" aria-label="Date selector">📅</button>
       <button class="notify-btn" onclick="openNotifications()" aria-label="Notifications">🔔<span id="notifyBadge" class="notify-badge hidden">0</span></button>
@@ -39,11 +40,6 @@
   </div>
 
   <!-- ATTENTION REQUIRED -->
-  <section class="card data-control-card" id="dataControlSection">
-    <div class="card-title"><div><h2>🛡 Data Control Center</h2><span>Hide • Review • Exclude • Reconcile • Restore</span></div><button class="report-view-btn" onclick="dcReviewModal()">🔔 Review</button></div>
-    <div id="dataControlContent"><div class="empty">Loading data controls...</div></div>
-  </section>
-
   <section class="attention-card" id="attentionRequiredCard" aria-live="polite">
     <div class="attention-head">
       <div>
@@ -328,6 +324,23 @@
     <div class="nav-item" onclick="goSpareParts()"><div>🔧</div>Spares</div>
     <div class="nav-item" onclick="goTrend()"><div>📊</div>Reports</div>
   </div>
+</div>
+
+
+<!-- DATA CONTROL / SETTINGS PAGE -->
+<div class="dc-page" id="dataControlPage" aria-hidden="true">
+  <div class="dc-page-head">
+    <div>
+      <div class="dc-page-kicker">SITE SETTINGS</div>
+      <h2>🛡 Data Control Center</h2>
+      <p>Hide • Review • Exclude • Reconcile • Restore</p>
+    </div>
+    <div class="dc-page-actions">
+      <button class="report-view-btn" onclick="dcReviewModal()">🔔 Review</button>
+      <button class="report-close-btn" onclick="closeDataControlPage()">✕ Close</button>
+    </div>
+  </div>
+  <div id="dataControlContent"><div class="empty">Loading data controls...</div></div>
 </div>
 
 <div class="modal" id="modal" onclick="outsideClose(event)">

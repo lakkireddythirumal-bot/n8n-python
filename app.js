@@ -171,6 +171,22 @@ function dcApplyUnexplainedDecision(item,action){
   const st=dcMaterialState(m); st.unexplainedSignature=sig; st.unexplainedDecision=action; DATA_CONTROL.materials[dcKey(m)]=st; saveDataControl(); renderDataControl(); renderDashboard();
 }
 function dcSetRecordByIndex(material,index,status,reason){const rows=dcRawTransactions(material);const t=rows[index];if(t)dcSetRecord(material,t,status,reason);}
+function openDataControlPage(){
+  const page=document.getElementById("dataControlPage");
+  if(!page)return;
+  page.classList.add("show");
+  page.setAttribute("aria-hidden","false");
+  document.body.classList.add("dc-page-open");
+  try{renderDataControl();}catch(e){console.warn("Data control page render failed",e)}
+}
+function closeDataControlPage(){
+  const page=document.getElementById("dataControlPage");
+  if(!page)return;
+  page.classList.remove("show");
+  page.setAttribute("aria-hidden","true");
+  document.body.classList.remove("dc-page-open");
+}
+
 function dcReviewModal(){
   const items=dcReviewItems();
   if(!items.length){showModal("🛡 Data Review",`<div class="dc-empty"><div>✓</div><h3>No review required</h3><p>No new hidden-item activity, unexplained consumption, or changed reconciliation decisions were detected.</p></div>`);return;}
@@ -668,11 +684,13 @@ function allMixMaterialTransactions(){
   return out;
 }
 function monthlyRMConsumption(m){
-  // RM transaction rows contain cumulative MTD values in for_month.
-  // For a month, use the latest dated Consumption record for each material
-  // instead of summing daily/MTD snapshots (which would double-count).
+  // Use the same approved/active dataset as the main RM calculations.
+  // Hidden materials and explicitly excluded records must never appear in
+  // Monthly Mix & Contribution.  Keep the latest dated MTD consumption row
+  // for each visible material so cumulative monthly values are not doubled.
   const latest={};
   allMixMaterialTransactions().forEach(({material,t})=>{
+    if(dcIsHiddenMaterial(material) || dcIsExcluded(material,t))return;
     const d=rowDate(t);
     if(monthKey(d)!==m || !isConsumptionMovement(tType(t)))return;
     const day=dateOnly(d)||"";
