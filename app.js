@@ -50,33 +50,46 @@ function dcRecordKey(material,t){
   return dcKey([material,dateOnly(rowDate(t)),tType(t),tVal(t),clean(t.for_day),clean(t.for_month),clean(t.for_year)].join("|"));
 }
 function dcRecordState(material,t){return DATA_CONTROL.records[dcRecordKey(material,t)]||null}
+function dcRefreshUI(){
+  try{renderDataControl();}catch(e){console.warn("Data control refresh failed",e)}
+  try{renderDashboard();}catch(e){console.warn("Dashboard refresh failed",e)}
+  const overlay=document.getElementById("dcReviewOverlay");
+  if(overlay && overlay.classList.contains("show")) setTimeout(()=>renderDcReviewOverlay(),0);
+}
+function closeDcReview(){
+  const overlay=document.getElementById("dcReviewOverlay");
+  if(!overlay)return;
+  overlay.classList.remove("show"); overlay.setAttribute("aria-hidden","true");
+}
+function dcReviewOverlayOutside(e){if(e.target&&e.target.id==="dcReviewOverlay")closeDcReview()}
+
 function dcSetMaterial(name,status,reason){
   const k=dcKey(name), now=new Date().toISOString(), base={status,reason:clean(reason),updatedAt:now};
   if(status==="HIDDEN"){const rows=dcMaterialActivity(name);base.activityAck=rows.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort().pop()||"";}
-  DATA_CONTROL.materials[k]=base; saveDataControl(); invalidatePerfCache(); renderDashboard(); renderDataControl();
+  DATA_CONTROL.materials[k]=base; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
 }
 function dcSetProduct(name,status,reason){
   const k=dcKey(name), now=new Date().toISOString(), base={status,reason:clean(reason),updatedAt:now};
   if(status==="HIDDEN"){const rows=[...(DATA.production||[]),...(DATA.productionHistory||[]),...(DATA.feedUnitData||[]),...(DATA.bags||[]),...(DATA.bagsHistory||[])].filter(r=>normalize(r.product||r.Product)===normalize(name));base.activityAck=rows.map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean).sort().pop()||"";}
-  DATA_CONTROL.products[k]=base; saveDataControl(); invalidatePerfCache(); renderDashboard(); renderDataControl();
+  DATA_CONTROL.products[k]=base; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
 }
 function dcSetRecord(material,t,status,reason){
-  const k=dcRecordKey(material,t); DATA_CONTROL.records[k]={status,reason:clean(reason),updatedAt:new Date().toISOString()}; saveDataControl(); invalidatePerfCache(); renderDashboard(); renderDataControl();
+  const k=dcRecordKey(material,t); DATA_CONTROL.records[k]={status,reason:clean(reason),updatedAt:new Date().toISOString()}; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
 }
 function dcReviewExcludedRecord(material,t,keep){
   const k=dcRecordKey(material,t), old=DATA_CONTROL.records[k]||{};
   DATA_CONTROL.records[k]={...old,status:keep?"EXCLUDED":"KEPT",reason:keep?"Reviewed — keep excluded":"Reconciliation changed — restored",updatedAt:new Date().toISOString(),reviewAck:keep?dcLatestRawReconciliation(material).status+"|"+dcLatestRawReconciliation(material).date:""};
-  saveDataControl(); invalidatePerfCache(); renderDashboard(); renderDataControl();
+  saveDataControl(); invalidatePerfCache(); dcRefreshUI();
 }
 function dcReviewHiddenMaterial(material,keep){
   const rows=dcMaterialActivity(material), latest=rows.map(t=>dateOnly(rowDate(t))).filter(Boolean).sort().pop()||"";
-  if(keep){const k=dcKey(material),st=dcMaterialState(material); DATA_CONTROL.materials[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); renderDashboard(); renderDataControl();}
+  if(keep){const k=dcKey(material),st=dcMaterialState(material); DATA_CONTROL.materials[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); dcRefreshUI();}
   else dcSetMaterial(material,"ACTIVE","Activity detected — reviewed");
 }
 function dcReviewHiddenProduct(product,keep){
   const rows=[...(DATA.production||[]),...(DATA.productionHistory||[]),...(DATA.feedUnitData||[]),...(DATA.bags||[]),...(DATA.bagsHistory||[])].filter(r=>normalize(r.product||r.Product)===normalize(product));
   const latest=rows.map(r=>dateOnly(r.Report_Date||r.report_date||r.date)).filter(Boolean).sort().pop()||"";
-  if(keep){const k=dcKey(product),st=dcProductState(product); DATA_CONTROL.products[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); renderDashboard(); renderDataControl();}
+  if(keep){const k=dcKey(product),st=dcProductState(product); DATA_CONTROL.products[k]={...st,status:"HIDDEN",reason:"Activity reviewed — keep hidden",updatedAt:new Date().toISOString(),activityAck:latest}; saveDataControl(); invalidatePerfCache(); dcRefreshUI();}
   else dcSetProduct(product,"ACTIVE","Activity detected — reviewed");
 }
 function dcIsExcluded(material,t){const s=dcRecordState(material,t);return s&&s.status==="EXCLUDED"}
@@ -168,7 +181,17 @@ function dcApplyUnexplainedDecisionByMaterial(material,action){
 }
 function dcApplyUnexplainedDecision(item,action){
   const m=item.item, rec=dcLatestRawReconciliation(m), sig=dcKey([m,rec.date,rec.cons,rec.opening,rec.add,rec.closing].join("|"));
-  const st=dcMaterialState(m); st.unexplainedSignature=sig; st.unexplainedDecision=action; DATA_CONTROL.materials[dcKey(m)]=st; saveDataControl(); renderDataControl(); renderDashboard();
+  const rows=dcRawTransactions(m);
+  if(rec.date){
+    rows.forEach(t=>{
+      if(dateOnly(rowDate(t))!==rec.date)return;
+      const ty=tType(t);
+      if(!(ty.includes("CONSUMPTION")||ty.includes("CONSUMPION")||ty.includes("CONSUMPTON")||ty.includes("CONSUMPTI")))return;
+      const k=dcRecordKey(m,t);
+      DATA_CONTROL.records[k]={status:action==="EXCLUDED"?"EXCLUDED":"KEPT",reason:action==="EXCLUDED"?"Unexplained consumption — excluded by manager":"Unexplained consumption — reviewed and kept",updatedAt:new Date().toISOString(),reviewAck:action==="EXCLUDED"?"":""};
+    });
+  }
+  const st=dcMaterialState(m); st.unexplainedSignature=sig; st.unexplainedDecision=action; DATA_CONTROL.materials[dcKey(m)]=st; saveDataControl(); invalidatePerfCache(); dcRefreshUI();
 }
 function dcSetRecordByIndex(material,index,status,reason){const rows=dcRawTransactions(material);const t=rows[index];if(t)dcSetRecord(material,t,status,reason);}
 function openDataControlPage(){
@@ -184,15 +207,33 @@ function closeDataControlPage(){
   if(!page)return;
   page.classList.remove("show");
   page.setAttribute("aria-hidden","true");
+  closeDcReview();
   document.body.classList.remove("dc-page-open");
 }
 
-function dcReviewModal(){
+function renderDcReviewOverlay(){
+  const overlay=document.getElementById("dcReviewOverlay"), content=document.getElementById("dcReviewContent"), subtitle=document.getElementById("dcReviewSubtitle");
+  if(!overlay||!content)return;
   const items=dcReviewItems();
-  if(!items.length){showModal("🛡 Data Review",`<div class="dc-empty"><div>✓</div><h3>No review required</h3><p>No new hidden-item activity, unexplained consumption, or changed reconciliation decisions were detected.</p></div>`);return;}
-  const html=`<div class="dc-review-list">${items.map((x,i)=>`<div class="dc-review-item ${x.level}"><div class="dc-review-top"><span class="dc-badge">${esc(x.type.replace(/_/g," "))}</span><strong>${esc(x.item)}</strong></div><div class="dc-review-reason">${esc(x.reason)}</div><div class="dc-review-detail">${esc(x.detail||"")}</div><div class="dc-actions">${x.type==="HIDDEN_ACTIVITY"?`<button onclick="dcReviewHiddenMaterial('${jsq(x.item)}',false)">Unhide</button><button onclick="dcReviewHiddenMaterial('${jsq(x.item)}',true)">Keep Hidden</button>`:x.type==="HIDDEN_PRODUCT_ACTIVITY"?`<button onclick="dcReviewHiddenProduct('${jsq(x.item)}',false)">Unhide</button><button onclick="dcReviewHiddenProduct('${jsq(x.item)}',true)">Keep Hidden</button>`:x.type==="UNEXPLAINED_CONSUMPTION"?`<button onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','EXCLUDED')">Exclude</button><button onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','KEPT')">Keep</button>`:x.type==="DUPLICATE_RECORD"?`<button onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'EXCLUDED','Duplicate — excluded by manager')">Exclude Duplicate</button><button onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'KEPT','Duplicate reviewed — keep')">Keep</button>`:`<button onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{})},false)">Restore</button><button onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{})},true)">Keep Excluded</button>`}</div></div>`).join("")}</div>`;
-  showModal("🛡 Data Review • "+items.length,html);
+  if(subtitle) subtitle.textContent=items.length?`${items.length} item${items.length===1?"":"s"} need manager review`:"No new review items detected";
+  if(!items.length){
+    content.innerHTML=`<div class="dc-review-empty"><div class="dc-review-empty-icon">✓</div><h4>Everything is reviewed</h4><p>No new hidden-item activity, unexplained consumption, duplicate or changed reconciliation decision needs attention.</p><button type="button" class="dc-primary-action" onclick="closeDcReview()">Done</button></div>`;
+    return;
+  }
+  content.innerHTML=`<div class="dc-review-list">${items.map((x,i)=>`<article class="dc-review-item ${x.level}">
+    <div class="dc-review-top"><span class="dc-badge">${esc(x.type.replace(/_/g," "))}</span><strong>${esc(x.item)}</strong></div>
+    <div class="dc-review-reason">${esc(x.reason)}</div>
+    <div class="dc-review-detail">${esc(x.detail||"")}</div>
+    <div class="dc-actions">${x.type==="HIDDEN_ACTIVITY"?`<button type="button" onclick="dcReviewHiddenMaterial('${jsq(x.item)}',false)">Unhide</button><button type="button" onclick="dcReviewHiddenMaterial('${jsq(x.item)}',true)">Keep Hidden</button>`:x.type==="HIDDEN_PRODUCT_ACTIVITY"?`<button type="button" onclick="dcReviewHiddenProduct('${jsq(x.item)}',false)">Unhide</button><button type="button" onclick="dcReviewHiddenProduct('${jsq(x.item)}',true)">Keep Hidden</button>`:x.type==="UNEXPLAINED_CONSUMPTION"?`<button type="button" onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','EXCLUDED')">Exclude</button><button type="button" onclick="dcApplyUnexplainedDecisionByMaterial('${jsq(x.item)}','KEPT')">Keep</button>`:x.type==="DUPLICATE_RECORD"?`<button type="button" onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'EXCLUDED','Duplicate — excluded by manager')">Exclude Duplicate</button><button type="button" onclick="dcSetRecordByIndex('${jsq(x.item)}',${Number(x.index)||0},'KEPT','Duplicate reviewed — keep')">Keep</button>`:`<button type="button" onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{}).replace(/</g,"\u003c")},false)">Restore</button><button type="button" onclick="dcReviewExcludedRecord('${jsq(x.item)}',${JSON.stringify(x.record||{}).replace(/</g,"\u003c")},true)">Keep Excluded</button>`}</div>
+  </article>`).join("")}</div>`;
 }
+function dcReviewModal(){
+  const overlay=document.getElementById("dcReviewOverlay");
+  if(!overlay)return;
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden","false");
+  renderDcReviewOverlay();
+}
+
 function dcItemReport(kind,name){
   const isMat=kind==="material", st=isMat?dcMaterialState(name):dcProductState(name);
   let html=`<div class="detail-section"><h3>${esc(name)}</h3>${detail("Control Status",st.status||"ACTIVE")}${st.reason?detail("Reason",st.reason):""}${st.updatedAt?detail("Last Decision",new Date(st.updatedAt).toLocaleString("en-IN")):""}</div>`;
