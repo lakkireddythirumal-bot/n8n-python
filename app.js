@@ -1173,9 +1173,15 @@ function renderDashboard(){
 
 
 function attentionReorderMaterials(){
-  return getMaterials().map(m=>{
+  return getMaterials().filter(m=>!isPremixMaterial(m)).map(m=>{
     const x=getMaterial(m), c=num(x?.closing)||0, avg=avgConsumption(m), s=stockStatus(c,avg);
     return {m,c,avg,s,unit:x?.unit||"MT"};
+  }).filter(x=>x.s.status==="REORDER");
+}
+function attentionReorderPremix(){
+  return getMaterials().filter(m=>isPremixMaterial(m)).map(m=>{
+    const x=getMaterial(m), c=num(x?.closing)||0, avg=avgConsumption(m), s=stockStatus(c,avg);
+    return {m,c,avg,s,unit:x?.unit||"KG"};
   }).filter(x=>x.s.status==="REORDER");
 }
 function attentionUnder3Materials(){
@@ -1228,8 +1234,13 @@ function spareOrderDisplayName(r){
 function openAttentionFiltered(kind){
   if(kind==="reorder"){
     const rows=attentionReorderMaterials();
-    const html=`<div class="detail-section"><h3>🔴 Raw Materials below reorder level • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(x.m)}')"><div><div class="row-name">${esc(x.m)}</div><div class="prod-meta">Stock ${fmt(x.c)} ${esc(x.unit)} • Avg ${fmt(x.avg)} ${esc(x.unit)}/day</div></div><div class="row-right"><strong>${x.s.cover===null?"--":fmt(x.s.cover)+" d"}</strong><small>Reorder</small></div></div>`).join("")||"<div class='empty'>No materials below reorder level.</div>"}</div>`;
-    showModal("🔴 Reorder Materials",html); return;
+    const html=`<div class="detail-section"><h3>🔴 Raw Materials below reorder level • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(x.m)}')"><div><div class="row-name">${esc(x.m)}</div><div class="prod-meta">Stock ${fmt(x.c)} ${esc(x.unit)} • Avg ${fmt(x.avg)} ${esc(x.unit)}/day</div></div><div class="row-right"><strong>${x.s.cover===null?"--":fmt(x.s.cover)+" d"}</strong><small>Reorder</small></div></div>`).join("")||"<div class='empty'>No raw materials below reorder level.</div>"}</div>`;
+    showModal("🔴 Raw Material Reorder",html); return;
+  }
+  if(kind==="premixReorder"){
+    const rows=attentionReorderPremix();
+    const html=`<div class="detail-section"><h3>🧪 Premix below reorder level • ${rows.length}</h3>${rows.map(x=>`<div class="feed-row" onclick="closeModal();openMaterialDetails('${jsq(x.m)}')"><div><div class="row-name">${esc(x.m)}</div><div class="prod-meta">Stock ${fmt(x.c)} ${esc(x.unit)} • Avg ${fmt(x.avg)} ${esc(x.unit)}/day</div></div><div class="row-right"><strong>${x.s.cover===null?"--":fmt(x.s.cover)+" d"}</strong><small>Reorder</small></div></div>`).join("")||"<div class='empty'>No premix below reorder level.</div>"}</div>`;
+    showModal("🧪 Premix Reorder",html); return;
   }
   if(kind==="under3"){
     const rows=attentionUnder3Materials().sort((a,b)=>a.s.cover-b.s.cover);
@@ -1259,13 +1270,15 @@ function openAttentionFiltered(kind){
 }
 function attentionSummaryItems(){
   const reorderRows=attentionReorderMaterials();
+  const premixReorderRows=attentionReorderPremix();
   const under3Rows=attentionUnder3Materials();
   const abnormalRows=attentionAbnormalConsumption();
   const bagRows=attentionIncreasedBagDamage();
   const spareRows=attentionPendingSpareOrders();
   const productionRows=attentionProductionIssues();
   const items=[];
-  items.push({icon:reorderRows.length?'🔴':'🟢',level:reorderRows.length?'critical':'clear',count:reorderRows.length,text:`${reorderRows.length} Raw Materials below reorder level`,reason:reorderRows.length?"Immediate replenishment recommended":"No material is below its reorder level",action:"openAttentionFiltered('reorder')"});
+  items.push({icon:reorderRows.length?'🔴':'🟢',level:reorderRows.length?'critical':'clear',count:reorderRows.length,text:`${reorderRows.length} Raw Materials below reorder level`,reason:reorderRows.length?"Immediate replenishment recommended":"No raw material is below its reorder level",action:"openAttentionFiltered('reorder')"});
+  items.push({icon:premixReorderRows.length?'🧪':'🟢',level:premixReorderRows.length?'critical':'clear',count:premixReorderRows.length,text:`${premixReorderRows.length} Premix below reorder level`,reason:premixReorderRows.length?"Premix replenishment recommended":"No premix is below its reorder level",action:"openAttentionFiltered('premixReorder')"});
   items.push({icon:under3Rows.length?'🟡':'🟢',level:under3Rows.length?'warning':'clear',count:under3Rows.length,text:`${under3Rows.length} materials with < 3 days cover`,reason:under3Rows.length?"Coverage is low but not yet at reorder level":"No additional low-coverage materials",action:"openAttentionFiltered('under3')"});
   items.push({icon:abnormalRows.length?'🔴':'🟢',level:abnormalRows.length?'critical':'clear',count:abnormalRows.length,text:`${abnormalRows.length} abnormal consumption`,reason:abnormalRows.length?"Consumption is outside the normal pattern":"Consumption is within the monitored range",action:"openAttentionFiltered('abnormal')"});
   items.push({icon:bagRows.length?'🟡':'🟢',level:bagRows.length?'warning':'clear',count:bagRows.length,text:`${bagRows.length} PP bag damage increases`,reason:bagRows.length?"Damage is higher than the previous available day":"No increase in recorded damage",action:"openAttentionFiltered('bags')"});
@@ -1363,15 +1376,19 @@ function stockStatus(closing,avg){
 function renderAlerts(){
   const items=[];
   const reorder=Array.isArray(DATA.reorder_items)?DATA.reorder_items:[];
+  const rawReorderNames=new Set(), premixReorderNames=new Set();
   reorder.forEach(r=>{
     const title=clean(r.material||r.Material||r.name||r.product);
-    if(title)items.push({title,msg:"Stock is at/below reorder level",type:"critical",icon:"🔴",category:isPremixMaterial(title)?"premixReorder":"rawReorder"});
+    if(!title)return;
+    (isPremixMaterial(title)?premixReorderNames:rawReorderNames).add(title);
   });
+  rawReorderNames.forEach(title=>items.push({title,msg:"Raw material stock is at/below reorder level",type:"critical",icon:"🔴",group:"rawReorder"}));
+  premixReorderNames.forEach(title=>items.push({title,msg:"Premix stock is at/below reorder level",type:"critical",icon:"🧪",group:"premixReorder"}));
   if(!reorder.length){
     getMaterials().forEach(m=>{
       const x=getMaterial(m),s=stockStatus(num(x?.closing)||0,avgConsumption(m));
-      if(s.status==="REORDER")items.push({title:m,msg:"Stock is at/below reorder level",type:"critical",icon:"🔴",category:isPremixMaterial(m)?"premixReorder":"rawReorder"});
-      else if(s.status==="WATCH")items.push({title:m,msg:"Stock coverage is getting low",type:"warning",icon:"🟠",category:isPremixMaterial(m)?"premixWatch":"rawWatch"});
+      if(s.status==="REORDER")items.push({title:m,msg:isPremixMaterial(m)?"Premix stock is at/below reorder level":"Raw material stock is at/below reorder level",type:"critical",icon:isPremixMaterial(m)?"🧪":"🔴",group:isPremixMaterial(m)?"premixReorder":"rawReorder"});
+      else if(s.status==="WATCH")items.push({title:m,msg:isPremixMaterial(m)?"Premix stock coverage is getting low":"Raw material stock coverage is getting low",type:"warning",icon:"🟠",group:isPremixMaterial(m)?"premixCoverage":"rawCoverage"});
     });
   }
   DATA.production.forEach(r=>{
@@ -1401,26 +1418,14 @@ function openNotifications(){
     showModal("🔔 Alerts",`<div class="detail-section"><h3>All clear</h3><div class="empty">No active alerts right now.</div></div>`);
     return;
   }
-  const rawReorder=ALERTS.filter(a=>a.category==="rawReorder");
-  const premixReorder=ALERTS.filter(a=>a.category==="premixReorder");
-  const rawWatch=ALERTS.filter(a=>a.category==="rawWatch");
-  const premixWatch=ALERTS.filter(a=>a.category==="premixWatch");
-  const otherCritical=ALERTS.filter(a=>a.type==="critical" && !["rawReorder","premixReorder"].includes(a.category));
-  const otherWarning=ALERTS.filter(a=>a.type==="warning" && !["rawWatch","premixWatch"].includes(a.category));
-  const section=(title,icon,rows,emptyText)=>{
-    if(!rows.length)return "";
-    return `<div class="detail-section alert-category-section"><div class="alert-category-title"><h3>${icon} ${esc(title)}</h3><span class="alert-category-count">${rows.length}</span></div>${rows.map(a=>{
-      const k=alertKey(a);
-      return `<div class="transaction notification-item"><button class="notification-dismiss" onclick="dismissAlert('${jsq(k)}')" aria-label="Dismiss alert">×</button><div class="transaction-title"><strong>${a.icon} ${esc(a.title)}</strong><span>${a.type==="critical"?"Critical":"Warning"}</span></div><div style="font-size:11px;color:#666">${esc(a.msg)}</div></div>`;
-    }).join("")}</div>`;
-  };
+  const rawReorderAlerts=ALERTS.filter(a=>a.group==="rawReorder");
+  const premixReorderAlerts=ALERTS.filter(a=>a.group==="premixReorder");
+  const otherAlerts=ALERTS.filter(a=>a.group!=="rawReorder"&&a.group!=="premixReorder");
+  const renderAlertGroup=(title,rows)=>rows.length?`<div class="detail-section"><h3>${title} • ${rows.length}</h3>${rows.map(a=>{const k=alertKey(a);return `<div class="transaction notification-item"><button class="notification-dismiss" onclick="dismissAlert('${jsq(k)}')" aria-label="Dismiss alert">×</button><div class="transaction-title"><strong>${a.icon} ${esc(a.title)}</strong><span>${a.type==="critical"?"Critical":"Warning"}</span></div><div style="font-size:11px;color:#666">${esc(a.msg)}</div></div>`}).join("")}</div>`:"";
   let html=`<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>🔔 Active Alerts (${ALERTS.length})</h3><button class="clear-alerts" onclick="clearDismissedAlerts()">Reset dismissed</button></div></div>`;
-  html+=section("Raw Material Reorder", "🧱", rawReorder, "");
-  html+=section("Premix Reorder", "🧪", premixReorder, "");
-  html+=section("Raw Material Low Coverage", "🟠", rawWatch, "");
-  html+=section("Premix Low Coverage", "🟡", premixWatch, "");
-  html+=section("Other Critical Alerts", "🔴", otherCritical, "");
-  html+=section("Other Warnings", "⚠️", otherWarning, "");
+  html+=renderAlertGroup("🔴 Raw Material Reorder",rawReorderAlerts);
+  html+=renderAlertGroup("🧪 Premix Reorder",premixReorderAlerts);
+  html+=renderAlertGroup("Other Alerts",otherAlerts);
   showModal("🔔 Alerts",html);
 }
 
