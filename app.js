@@ -1365,13 +1365,13 @@ function renderAlerts(){
   const reorder=Array.isArray(DATA.reorder_items)?DATA.reorder_items:[];
   reorder.forEach(r=>{
     const title=clean(r.material||r.Material||r.name||r.product);
-    if(title)items.push({title,msg:"Stock is at/below reorder level",type:"critical",icon:"🔴"});
+    if(title)items.push({title,msg:"Stock is at/below reorder level",type:"critical",icon:"🔴",category:isPremixMaterial(title)?"premixReorder":"rawReorder"});
   });
   if(!reorder.length){
     getMaterials().forEach(m=>{
       const x=getMaterial(m),s=stockStatus(num(x?.closing)||0,avgConsumption(m));
-      if(s.status==="REORDER")items.push({title:m,msg:"Stock is at/below reorder level",type:"critical",icon:"🔴"});
-      else if(s.status==="WATCH")items.push({title:m,msg:"Stock coverage is getting low",type:"warning",icon:"🟠"});
+      if(s.status==="REORDER")items.push({title:m,msg:"Stock is at/below reorder level",type:"critical",icon:"🔴",category:isPremixMaterial(m)?"premixReorder":"rawReorder"});
+      else if(s.status==="WATCH")items.push({title:m,msg:"Stock coverage is getting low",type:"warning",icon:"🟠",category:isPremixMaterial(m)?"premixWatch":"rawWatch"});
     });
   }
   DATA.production.forEach(r=>{
@@ -1401,13 +1401,26 @@ function openNotifications(){
     showModal("🔔 Alerts",`<div class="detail-section"><h3>All clear</h3><div class="empty">No active alerts right now.</div></div>`);
     return;
   }
-  const critical=ALERTS.filter(a=>a.type==="critical"),warning=ALERTS.filter(a=>a.type==="warning");
-  let html=`<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>🔔 Active Alerts (${ALERTS.length})</h3><button class="clear-alerts" onclick="clearDismissedAlerts()">Reset dismissed</button></div>`;
-  [...critical,...warning].forEach(a=>{
-    const k=alertKey(a);
-    html+=`<div class="transaction notification-item"><button class="notification-dismiss" onclick="dismissAlert('${jsq(k)}')" aria-label="Dismiss alert">×</button><div class="transaction-title"><strong>${a.icon} ${esc(a.title)}</strong><span>${a.type==="critical"?"Critical":"Warning"}</span></div><div style="font-size:11px;color:#666">${esc(a.msg)}</div></div>`;
-  });
-  html+=`</div>`;
+  const rawReorder=ALERTS.filter(a=>a.category==="rawReorder");
+  const premixReorder=ALERTS.filter(a=>a.category==="premixReorder");
+  const rawWatch=ALERTS.filter(a=>a.category==="rawWatch");
+  const premixWatch=ALERTS.filter(a=>a.category==="premixWatch");
+  const otherCritical=ALERTS.filter(a=>a.type==="critical" && !["rawReorder","premixReorder"].includes(a.category));
+  const otherWarning=ALERTS.filter(a=>a.type==="warning" && !["rawWatch","premixWatch"].includes(a.category));
+  const section=(title,icon,rows,emptyText)=>{
+    if(!rows.length)return "";
+    return `<div class="detail-section alert-category-section"><div class="alert-category-title"><h3>${icon} ${esc(title)}</h3><span class="alert-category-count">${rows.length}</span></div>${rows.map(a=>{
+      const k=alertKey(a);
+      return `<div class="transaction notification-item"><button class="notification-dismiss" onclick="dismissAlert('${jsq(k)}')" aria-label="Dismiss alert">×</button><div class="transaction-title"><strong>${a.icon} ${esc(a.title)}</strong><span>${a.type==="critical"?"Critical":"Warning"}</span></div><div style="font-size:11px;color:#666">${esc(a.msg)}</div></div>`;
+    }).join("")}</div>`;
+  };
+  let html=`<div class="detail-section"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3>🔔 Active Alerts (${ALERTS.length})</h3><button class="clear-alerts" onclick="clearDismissedAlerts()">Reset dismissed</button></div></div>`;
+  html+=section("Raw Material Reorder", "🧱", rawReorder, "");
+  html+=section("Premix Reorder", "🧪", premixReorder, "");
+  html+=section("Raw Material Low Coverage", "🟠", rawWatch, "");
+  html+=section("Premix Low Coverage", "🟡", premixWatch, "");
+  html+=section("Other Critical Alerts", "🔴", otherCritical, "");
+  html+=section("Other Warnings", "⚠️", otherWarning, "");
   showModal("🔔 Alerts",html);
 }
 
